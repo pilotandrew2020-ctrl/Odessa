@@ -48,11 +48,12 @@ function patchMat(mat,o){
     vs=vs.replace('#include <common>','#include <common>\n'+PATCH_VS_DECL+'\n'+(o.vDecl||''));
     if(o.vBegin)vs=vs.replace('#include <begin_vertex>','#include <begin_vertex>\n'+o.vBegin);
     vs=vs.replace('#include <project_vertex>','#include <project_vertex>\n'+PATCH_VS_MAIN+'\n'+(o.vMain||''));
-    fs=fs.replace('#include <common>','#include <common>\n'+GLSL_LIB+'\nuniform sampler2D tAsph,tTiles,tCob,tGrass,tDirt,tSand,tSnow,tBrick,tPlaster,tConc,tRoof,tGran,tMarble,tWood,uSD,uLU;uniform vec4 uSDT;\n'+(o.fDecl||''));
+    fs=fs.replace('#include <common>','#include <common>\n#define tx2(s,uv) texture2D(s,uv,1.15)\n'+GLSL_LIB+'\nuniform sampler2D tAsph,tTiles,tCob,tGrass,tDirt,tSand,tSnow,tBrick,tPlaster,tConc,tRoof,tGran,tMarble,tWood,uSD,uLU;uniform vec4 uSDT;\n'+(o.fDecl||''));
     fs=fs.replace('#include <color_fragment>','#include <color_fragment>\nvec3 sAlb=diffuseColor.rgb;float sRough=roughness;float sMetal=metalness;vec3 sEmis=vec3(0.);float sH=0.;float sBump=0.;float sAO=1.;\n'+(o.fSurf||'')+'\ndiffuseColor.rgb=sAlb;');
+    fs=fs.replace(/texture2D\((t[A-Z][A-Za-z]*),/g,'tx2($1,');
     fs=fs.replace('#include <roughnessmap_fragment>','float roughnessFactor=sRough;');
     fs=fs.replace('#include <metalnessmap_fragment>','float metalnessFactor=sMetal;');
-    fs=fs.replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nsBump*=1.-smoothstep(10.,38.,length(vViewPosition));if(sBump>.01)normal=bumpN(-vViewPosition,normal,vec2(dFdx(sH),dFdy(sH))*sBump,faceDirection);');
+    fs=fs.replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nsBump*=.55*(1.-smoothstep(3.,15.,length(vViewPosition)));if(sBump>.01)normal=bumpN(-vViewPosition,normal,clamp(vec2(dFdx(sH),dFdy(sH)),-.06,.06)*sBump,faceDirection);');
     fs=fs.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=sEmis;');
     fs=fs.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse*=sAO;reflectedLight.indirectSpecular*=mix(1.,sAO,.5);'+
       (o.noLamps?'':'{vec3 _wn=inverseTransformDirection(normal,viewMatrix);vec3 _V=normalize(cameraPosition-vW);vec3 _d=vec3(0.),_s=vec3(0.);lampLight(vW,_wn,_V,roughnessFactor,_d,_s);reflectedLight.directDiffuse+=diffuseColor.rgb*_d*sAO;reflectedLight.directSpecular+=_s;}'));

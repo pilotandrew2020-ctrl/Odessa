@@ -44,7 +44,7 @@ function setupRenderer(){
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   pmrem=new THREE.PMREMGenerator(renderer);
 }
-let pixelScale=1;
+let pixelScale=1;const _SL=new THREE.Vector3(),_SU=new THREE.Vector3(),_SR=new THREE.Vector3(),_SV=new THREE.Vector3(),_ST=new THREE.Vector3();
 function applyQuality(){
   const q=Qp();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,q.pr)*pixelScale);
@@ -55,7 +55,7 @@ function applyQuality(){
     sunL.shadow.bias=-.0005;sunL.shadow.normalBias=.35;if(sunL.shadow.map){sunL.shadow.map.dispose();sunL.shadow.map=null}}
   if(q.bloom&&THREE.EffectComposer){
     const w=innerWidth,h=innerHeight,pr=renderer.getPixelRatio();
-    const rt=new THREE.WebGLRenderTarget(w*pr,h*pr,{type:THREE.HalfFloatType,format:THREE.RGBAFormat,depthBuffer:true,stencilBuffer:true}); // 24-bit depth (16-bit made textures shimmer)
+    const rt=new THREE.WebGLRenderTarget(w*pr,h*pr,{type:THREE.HalfFloatType,format:THREE.RGBAFormat,depthBuffer:true,stencilBuffer:true,samples:renderer.capabilities.isWebGL2?(pr>1.2?2:4):0}); // 24-bit depth (16-bit made textures shimmer)
     composer=new THREE.EffectComposer(renderer,rt);composer.setPixelRatio(pr);composer.setSize(w,h);
     composer.addPass(new THREE.RenderPass(scene,camera));
     bloomPass=new THREE.UnrealBloomPass(new THREE.Vector2(w/2,h/2),.5,.55,.86);composer.addPass(bloomPass);
@@ -598,6 +598,7 @@ function adaptRes(dt){ftAcc+=dt;ftN++;ftT+=dt;if(ftT<2.5)return;const avg=ftAcc/
 // ---------- init ----------
 async function boot(){
   try{COOP.initMenu()}catch(e){console.error('coop menu',e)}
+  try{HS.build()}catch(e){console.error('hs build',e)}
   try{await decodeData()}catch(e){$('bStart').textContent='Couldn\'t load the map';console.error(e);return}
   $('bStart').textContent='Painting textures…';await new Promise(r=>setTimeout(r,30));
   genTextures();try{await document.fonts.ready}catch(e){}genSignAtlas();genProductAtlas();
@@ -644,7 +645,10 @@ function loop(t){
   if(DRIVE.on&&UNI.uNight.value>.3){const c=DRIVE.car,[hx,hz]=carAhead(c,7.5);UNI.uL.value[15].set(hx,c.y+2.6,hz,3.6);DRIVE.hl=true}else if(DRIVE.hl){DRIVE.hl=false;updateLampUniforms()}
   sky.position.copy(camera.position);nightSky.position.copy(camera.position);
   seaMesh.position.x=Math.round(camera.position.x/100)*100;seaMesh.position.z=Math.round(camera.position.z/100)*100;
-  if(sunL.castShadow){const sx=Math.round(player.x/2)*2,sz=Math.round(player.z/2)*2;sunL.target.position.set(sx,player.y,sz);sunL.position.set(sx+sunDir.x*300,player.y+sunDir.y*300,sz+sunDir.z*300);}
+  if(sunL.castShadow){const q=Qp(),tx=2*q.sr/q.shadow;_SL.copy(sunDir).normalize();_SU.set(0,1,0);if(Math.abs(_SL.y)>.99)_SU.set(1,0,0);
+    _SR.crossVectors(_SU,_SL).normalize();_SV.crossVectors(_SL,_SR);_ST.set(player.x,player.y,player.z);const a=_ST.dot(_SR),b=_ST.dot(_SV);
+    _ST.addScaledVector(_SR,Math.round(a/tx)*tx-a).addScaledVector(_SV,Math.round(b/tx)*tx-b);   // snap to shadow texels: no crawling shadows
+    sunL.target.position.copy(_ST);sunL.position.copy(_ST).addScaledVector(_SL,300);}
   else sunL.position.copy(sunDir).multiplyScalar(300).add(camera.position);
   updateSnow(dt);
   renderer.info.reset();if(composer)composer.render();else renderer.render(scene,camera);

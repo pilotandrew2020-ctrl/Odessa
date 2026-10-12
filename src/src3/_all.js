@@ -348,11 +348,12 @@ function patchMat(mat,o){
     vs=vs.replace('#include <common>','#include <common>\n'+PATCH_VS_DECL+'\n'+(o.vDecl||''));
     if(o.vBegin)vs=vs.replace('#include <begin_vertex>','#include <begin_vertex>\n'+o.vBegin);
     vs=vs.replace('#include <project_vertex>','#include <project_vertex>\n'+PATCH_VS_MAIN+'\n'+(o.vMain||''));
-    fs=fs.replace('#include <common>','#include <common>\n'+GLSL_LIB+'\nuniform sampler2D tAsph,tTiles,tCob,tGrass,tDirt,tSand,tSnow,tBrick,tPlaster,tConc,tRoof,tGran,tMarble,tWood,uSD,uLU;uniform vec4 uSDT;\n'+(o.fDecl||''));
+    fs=fs.replace('#include <common>','#include <common>\n#define tx2(s,uv) texture2D(s,uv,1.15)\n'+GLSL_LIB+'\nuniform sampler2D tAsph,tTiles,tCob,tGrass,tDirt,tSand,tSnow,tBrick,tPlaster,tConc,tRoof,tGran,tMarble,tWood,uSD,uLU;uniform vec4 uSDT;\n'+(o.fDecl||''));
     fs=fs.replace('#include <color_fragment>','#include <color_fragment>\nvec3 sAlb=diffuseColor.rgb;float sRough=roughness;float sMetal=metalness;vec3 sEmis=vec3(0.);float sH=0.;float sBump=0.;float sAO=1.;\n'+(o.fSurf||'')+'\ndiffuseColor.rgb=sAlb;');
+    fs=fs.replace(/texture2D\((t[A-Z][A-Za-z]*),/g,'tx2($1,');
     fs=fs.replace('#include <roughnessmap_fragment>','float roughnessFactor=sRough;');
     fs=fs.replace('#include <metalnessmap_fragment>','float metalnessFactor=sMetal;');
-    fs=fs.replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nsBump*=1.-smoothstep(10.,38.,length(vViewPosition));if(sBump>.01)normal=bumpN(-vViewPosition,normal,vec2(dFdx(sH),dFdy(sH))*sBump,faceDirection);');
+    fs=fs.replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nsBump*=.55*(1.-smoothstep(3.,15.,length(vViewPosition)));if(sBump>.01)normal=bumpN(-vViewPosition,normal,clamp(vec2(dFdx(sH),dFdy(sH)),-.06,.06)*sBump,faceDirection);');
     fs=fs.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=sEmis;');
     fs=fs.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse*=sAO;reflectedLight.indirectSpecular*=mix(1.,sAO,.5);'+
       (o.noLamps?'':'{vec3 _wn=inverseTransformDirection(normal,viewMatrix);vec3 _V=normalize(cameraPosition-vW);vec3 _d=vec3(0.),_s=vec3(0.);lampLight(vW,_wn,_V,roughnessFactor,_d,_s);reflectedLight.directDiffuse+=diffuseColor.rgb*_d*sAO;reflectedLight.directSpecular+=_s;}'));
@@ -3980,7 +3981,7 @@ function setupRenderer(){
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   pmrem=new THREE.PMREMGenerator(renderer);
 }
-let pixelScale=1;
+let pixelScale=1;const _SL=new THREE.Vector3(),_SU=new THREE.Vector3(),_SR=new THREE.Vector3(),_SV=new THREE.Vector3(),_ST=new THREE.Vector3();
 function applyQuality(){
   const q=Qp();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,q.pr)*pixelScale);
@@ -3991,7 +3992,7 @@ function applyQuality(){
     sunL.shadow.bias=-.0005;sunL.shadow.normalBias=.35;if(sunL.shadow.map){sunL.shadow.map.dispose();sunL.shadow.map=null}}
   if(q.bloom&&THREE.EffectComposer){
     const w=innerWidth,h=innerHeight,pr=renderer.getPixelRatio();
-    const rt=new THREE.WebGLRenderTarget(w*pr,h*pr,{type:THREE.HalfFloatType,format:THREE.RGBAFormat,depthBuffer:true,stencilBuffer:true}); // 24-bit depth (16-bit made textures shimmer)
+    const rt=new THREE.WebGLRenderTarget(w*pr,h*pr,{type:THREE.HalfFloatType,format:THREE.RGBAFormat,depthBuffer:true,stencilBuffer:true,samples:renderer.capabilities.isWebGL2?(pr>1.2?2:4):0}); // 24-bit depth (16-bit made textures shimmer)
     composer=new THREE.EffectComposer(renderer,rt);composer.setPixelRatio(pr);composer.setSize(w,h);
     composer.addPass(new THREE.RenderPass(scene,camera));
     bloomPass=new THREE.UnrealBloomPass(new THREE.Vector2(w/2,h/2),.5,.55,.86);composer.addPass(bloomPass);
@@ -4534,6 +4535,7 @@ function adaptRes(dt){ftAcc+=dt;ftN++;ftT+=dt;if(ftT<2.5)return;const avg=ftAcc/
 // ---------- init ----------
 async function boot(){
   try{COOP.initMenu()}catch(e){console.error('coop menu',e)}
+  try{HS.build()}catch(e){console.error('hs build',e)}
   try{await decodeData()}catch(e){$('bStart').textContent='Couldn\'t load the map';console.error(e);return}
   $('bStart').textContent='Painting textures…';await new Promise(r=>setTimeout(r,30));
   genTextures();try{await document.fonts.ready}catch(e){}genSignAtlas();genProductAtlas();
@@ -4580,7 +4582,10 @@ function loop(t){
   if(DRIVE.on&&UNI.uNight.value>.3){const c=DRIVE.car,[hx,hz]=carAhead(c,7.5);UNI.uL.value[15].set(hx,c.y+2.6,hz,3.6);DRIVE.hl=true}else if(DRIVE.hl){DRIVE.hl=false;updateLampUniforms()}
   sky.position.copy(camera.position);nightSky.position.copy(camera.position);
   seaMesh.position.x=Math.round(camera.position.x/100)*100;seaMesh.position.z=Math.round(camera.position.z/100)*100;
-  if(sunL.castShadow){const sx=Math.round(player.x/2)*2,sz=Math.round(player.z/2)*2;sunL.target.position.set(sx,player.y,sz);sunL.position.set(sx+sunDir.x*300,player.y+sunDir.y*300,sz+sunDir.z*300);}
+  if(sunL.castShadow){const q=Qp(),tx=2*q.sr/q.shadow;_SL.copy(sunDir).normalize();_SU.set(0,1,0);if(Math.abs(_SL.y)>.99)_SU.set(1,0,0);
+    _SR.crossVectors(_SU,_SL).normalize();_SV.crossVectors(_SL,_SR);_ST.set(player.x,player.y,player.z);const a=_ST.dot(_SR),b=_ST.dot(_SV);
+    _ST.addScaledVector(_SR,Math.round(a/tx)*tx-a).addScaledVector(_SV,Math.round(b/tx)*tx-b);   // snap to shadow texels: no crawling shadows
+    sunL.target.position.copy(_ST);sunL.position.copy(_ST).addScaledVector(_SL,300);}
   else sunL.position.copy(sunDir).multiplyScalar(300).add(camera.position);
   updateSnow(dt);
   renderer.info.reset();if(composer)composer.render();else renderer.render(scene,camera);
@@ -4637,22 +4642,27 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
     addEventListener('keydown',e=>{if(!started||document.activeElement===ci)return;if(e.code==='KeyT'){e.preventDefault();this.openChat()}if(e.code==='KeyG')this.goTo(this.nearest())})},
   markOutfit(){document.querySelectorAll('#coOutfits button').forEach(b=>b.classList.toggle('on',+b.dataset.o===this.me.outfit))},
   status(t){const s=$('coStatus');if(s)s.textContent=t},
-  online(){return !!this.room||NET.active},
+  online(){return !!this.room},
   async init(){
     this.status('Co-op: connecting…');
     let room=null;try{if(window.claude&&window.claude.use)room=await window.claude.use('room')}catch(e){room=null}
     if(!room){this.status('Claude co-op is off here — use a room code below to play with a friend.');return}
-    this.room=room;this.ok=true;
-    room.onPeers(ch=>this.onPeers(ch),e=>{this.ok=false;this.status('Co-op disconnected');this.clearAll()});
-    room.onConnection(c=>{this.status(c?this.countText():'Co-op: reconnecting…')});
-    try{await room.presence({v:1,in:0,n:this.nameOf()})}catch(e){}
+    this.lobby=room;this.ok=true;await this.useRoom(room,'');
   },
+  // switch the active room: the shared lobby, or a private named room made from a 4-digit code
+  async useRoom(room,code){
+    for(const u of this.unsubs||[])try{u()}catch(e){}this.unsubs=[];this.clearAll();this.room=room;this.code=code;
+    this.unsubs.push(room.onPeers(ch=>this.onPeers(ch),e=>{this.ok=false;this.status('Co-op disconnected');this.clearAll()}));
+    this.unsubs.push(room.onConnection(c=>{this.status(c?this.countText():'Co-op: reconnecting…')}));
+    try{await room.presence({v:1,in:started?1:0,n:this.nameOf()})}catch(e){}
+    if(code&&this.lobby&&this.lobby!==room)try{await this.lobby.presence({v:1,in:0,n:this.nameOf(),hid:1})}catch(e){}
+    this.last='';this.push(true);this.status(this.countText())},
   countText(){const all=[...this.peers.values()];const n=all.filter(p=>p.st&&p.st.in).length,m=all.length-n;
     if(!all.length)return 'Co-op: on, waiting for friends — nobody else has the game open';
     return 'Co-op: '+(n?n+' playing':'')+(n&&m?', ':'')+(m?m+' in the menu':'')},
   onPeers(ch){
     const seen=new Set();
-    for(const p of ch.peers){if(p.isMe||p.kind!=='viewer')continue;seen.add(p.peer);
+    for(const p of ch.peers){if(p.isMe){this.myId=p.peer;continue}if(p.kind!=='viewer')continue;seen.add(p.peer);
       const st=p.presence||{};let R=this.peers.get(p.peer);
       if(!R){R={peer:p.peer,st:null,P:null,tag:null,tagName:'',bub:null,bubT:0,sayT:0,x:0,y:0,z:0,yaw:0,has:false,outfit:-1};this.peers.set(p.peer,R)}
       const wasIn=R.st&&R.st.in;R.st=st;
@@ -4691,6 +4701,7 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
     if(ret){st.rx=r2(ret.x);st.rz=r2(ret.z);st.rr=r2(ret.yaw||0);st.zt=(ind&&ind.title)||''}
     if(typeof DRIVE!=='undefined'&&DRIVE.on&&DRIVE.car){st.x=r2(DRIVE.car.x);st.z=r2(DRIVE.car.z);st.y=r2(DRIVE.car.y);st.r=r2(DRIVE.car.yaw||0)}
     if(this.say){st.say=this.say.m;st.sayT=this.say.t}
+    if(typeof HS!=='undefined'){const h=HS.pub();if(h)st.hs=h;if(HS.on&&HS.role==='H'&&HS.camo&&!HS.myFound)st.cc=parseInt(HS.camo.slice(1),16)}
     const key=JSON.stringify(st);const now=performance.now();
     if(NET.active&&(force||key!==this.lastN||now-(this.lastNT||0)>1000)){this.lastN=key;this.lastNT=now;NET.send(st)}
     if(this.room&&(force||key!==this.last)){this.last=key;this.room.presence(st).catch(()=>{})}},
@@ -4710,7 +4721,7 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
     for(const R of this.peers.values()){const s=R.st;
       const show=!!(s&&s.in&&(s.zn||'')===zn&&typeof s.x==='number');
       if(!show){if(R.P)R.P.root.visible=false;if(R.lo)R.lo.visible=false;if(R.tag)R.tag.visible=false;if(R.bub)R.bub.visible=false;R.has=false;continue}
-      if(!R.P||R.outfit!==(s.o|0)){if(R.P)scene.remove(R.P.root);R.outfit=s.o|0;if(R.lo){scene.remove(R.lo);R.lo.geometry.dispose()}R.P=makePlayer((OUTFITS[R.outfit]||OUTFITS[0]).o);R.P.can.visible=false;R.P.scooter.visible=false;R.P.speaker.visible=false;R.lo=bakeAvatar(R.P);scene.add(R.lo);mergeAvatar(R.P.root);R.P.root.traverse(o=>{if(o.isMesh)o.castShadow=true});scene.add(R.P.root);R.has=false}
+      const okey=s.cc?100000+(s.cc|0):(s.o|0);if(!R.P||R.outfit!==okey){if(R.P)scene.remove(R.P.root);R.outfit=okey;if(R.lo){scene.remove(R.lo);R.lo.geometry.dispose()}R.P=makePlayer(s.cc?camoOutfit('#'+(s.cc|0).toString(16).padStart(6,'0')):(OUTFITS[s.o|0]||OUTFITS[0]).o);R.P.can.visible=false;R.P.scooter.visible=false;R.P.speaker.visible=false;R.lo=bakeAvatar(R.P);scene.add(R.lo);mergeAvatar(R.P.root);R.P.root.traverse(o=>{if(o.isMesh)o.castShadow=true});scene.add(R.P.root);R.has=false}
       const nm=(s.n||'Friend').slice(0,16);
       if(!R.tag||R.tagName!==nm){if(R.tag){scene.remove(R.tag);R.tag.material.map.dispose()}R.tag=labelSprite([nm],{w:512,h:120,size:72,color:'#0b1b22',bg:'rgba(242,193,78,.95)',round:50,depthTest:false,scale:1});R.tag.material.sizeAttenuation=false;R.tag.scale.multiplyScalar(.055);R.tag.renderOrder=998;scene.add(R.tag);R.tagName=nm}
       if(s.say&&s.sayT&&s.sayT!==R.sayT){const first=R.sayT===0&&!R.fresh;R.sayT=s.sayT;if(!first)this.showBubble(R,String(s.say).slice(0,80))}R.fresh=true;
@@ -4721,14 +4732,14 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
       const m=s.m||'walk';
       if(P.root.visible){if(m==='car'||m==='tram'||m==='sit')animPlayer(P,{spd:0,mode:'sit'},dt);else animPlayer(P,{spd:s.s||0,mode:m==='air'?'air':(m==='scoot'?'scoot':'walk')},dt)}else{R.lo.position.y+=Math.abs(Math.sin(performance.now()*.008))*.04*Math.min(1,(s.s||0))}
       if(m==='car'||m==='tram')P.root.position.y+=.35;
-      R.tag.visible=true;R.tag.position.set(R.x,R.y+2.15,R.z);
+      R.tag.visible=!(typeof HS!=='undefined'&&HS.hideTag(R));R.tag.position.set(R.x,R.y+2.15,R.z);
       if(R.bub){R.bubT-=dt;R.bub.position.set(R.x,R.y+2.6,R.z);R.bub.visible=R.bubT>0}}
     this.listT=(this.listT||0)-dt;if(this.listT<=0){this.listT=1;this.renderList()}},
   renderList(){const L=$('coList'),bf=$('bFriends');if(!L||!bf)return;
     const on=[...this.peers.values()].filter(R=>R.st&&R.st.in);const menu=[...this.peers.values()].filter(R=>!(R.st&&R.st.in));bf.textContent='👥 '+on.length+(menu.length?' (+'+menu.length+')':'');bf.hidden=!this.online();
     L.hidden=!this.listOpen||!this.online();if(L.hidden)return;L.innerHTML='';
     for(const R of menu){const d=document.createElement('div');d.className='coEmpty';d.textContent=((R.st&&R.st.n)||'A friend')+' has the game open but is still in the menu';L.appendChild(d)}
-    if(!on.length&&!menu.length){const d=document.createElement('div');d.className='coEmpty';d.textContent=(NET.active&&NET.host?'Room code '+NET.code+' — send it to your friend. They type it in the menu and press Join.':'Nobody else is here yet.');L.appendChild(d);return}
+    if(!on.length&&!menu.length){const d=document.createElement('div');d.className='coEmpty';d.textContent=(NET.active?'Room code '+NET.code+' — send it to your friend. They type it in the menu and press Join.':'Nobody else is here yet.');L.appendChild(d);return}
     const me=PORTAL.cur?(PORTAL.ret||player):player;
     for(const R of on){const s=R.st;const b=document.createElement('button');const x=s.zn?s.rx:s.x,z=s.zn?s.rz:s.z;
       const nm=document.createElement('b');nm.textContent=s.n||'Friend';const sm=document.createElement('small');
@@ -4737,37 +4748,91 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
 };
 function teleportRawNear(x,z,yaw){player.x=x-Math.sin(yaw||0)*1.5;player.z=z-Math.cos(yaw||0)*1.5;player.vx=player.vz=0;toast('Next to your friend','')}
 
-// ===================== room codes over WebRTC (PeerJS) — works without a Claude account =====================
-// The host's browser is the hub: guests send their state to the host, the host relays everyone to everyone.
-const NET={peer:null,conns:new Map(),host:false,code:'',active:false,
+// ===================== room codes: private named rooms through the Claude room (no WebRTC, works on iPad) =====================
+const NET={active:false,code:'',
   st(t,ok){const e=$('netStatus');if(e){e.textContent=t;e.classList.toggle('ok',!!ok)}},
-  reset(){try{if(this.peer)this.peer.destroy()}catch(e){}this.peer=null;for(const id of this.conns.keys())COOP.netRemove(id);this.conns.clear();this.active=false;this.host=false},
-  opts(){return Object.assign({debug:0},window.__PEER_OPTS||{})},
-  create(){if(!window.RTCPeerConnection){this.st('Room codes are blocked inside the Claude page. Sign in to Claude instead — co-op then works automatically.');return}if(typeof Peer==='undefined'){this.st('Online play could not load');return}this.reset();
-    const code=String(1000+Math.floor(Math.random()*9000));this.code=code;this.host=true;this.st('Creating room…');
-    const p=new Peer('odesa-mp-'+code,this.opts());this.peer=p;
-    p.on('open',()=>{this.active=true;this.st('Room code: '+code+' — send it to your friend, then press Play',true);$('netCode').value=code;COOP.renderList()});
-    p.on('connection',c=>this.addConn(c));
-    p.on('error',e=>{if(e.type==='unavailable-id'){this.create();return}this.st('Room error: '+(e.type||'unknown')+' — try Create again')});
-    p.on('disconnected',()=>{try{p.reconnect()}catch(e){}})},
-  join(raw){const code=String(raw||'').replace(/\D/g,'').slice(0,4);if(code.length!==4){this.st('Type the 4-digit room code');return}
-    if(!window.RTCPeerConnection){this.st('Room codes are blocked inside the Claude page. Sign in to Claude instead — co-op then works automatically.');return}
-    if(typeof Peer==='undefined'){this.st('Online play could not load');return}this.reset();this.code=code;this.st('Joining room '+code+'…');
-    const p=new Peer(this.opts());this.peer=p;
-    p.on('open',()=>{const c=p.connect('odesa-mp-'+code,{reliable:true});this.addConn(c);setTimeout(()=>{if(!this.conns.size)this.st('Still connecting to '+code+'… check the code')},8000)});
-    p.on('error',e=>{this.st(e.type==='peer-unavailable'?'Room '+code+' not found — check the code (the host must keep the game open)':'Connection error: '+(e.type||'unknown'))})},
-  addConn(c){c.on('open',()=>{this.conns.set(c.peer,c);this.active=true;
-      this.st(this.host?('Room code: '+this.code+' — '+this.conns.size+' friend'+(this.conns.size>1?'s':'')+' connected'):('Connected to room '+this.code),true);COOP.push(true);COOP.renderList()});
-    c.on('data',d=>this.onData(c,d));
-    const gone=()=>{if(!this.conns.has(c.peer))return;this.conns.delete(c.peer);COOP.netRemove(c.peer);
-      if(this.host){for(const o of this.conns.values())try{o.send({t:'bye',id:c.peer})}catch(e){}this.st('Room code: '+this.code+' — '+this.conns.size+' connected',true)}
-      else{for(const k of [...COOP.peers.keys()])if(k.startsWith('n:'))COOP.netRemove(k.slice(2));this.active=false;this.st('The room closed (host left)');if(started)toast('Room closed','the host left the game')}};
-    c.on('close',gone);c.on('error',gone)},
-  onData(c,d){if(!d||typeof d!=='object')return;
-    if(d.t==='st'&&d.s&&typeof d.s==='object'){
-      if(this.host){COOP.netUpsert(c.peer,d.s);for(const [id,o] of this.conns)if(id!==c.peer)try{o.send({t:'st',id:c.peer,s:d.s})}catch(e){}}
-      else{const id=typeof d.id==='string'?d.id:c.peer;if(id===this.peer.id)return;COOP.netUpsert(id,d.s)}}
-    else if(d.t==='bye'&&!this.host&&typeof d.id==='string')COOP.netRemove(d.id)},
-  send(st){if(!this.active)return;if(this.host){for(const o of this.conns.values())try{o.send({t:'st',id:this.peer.id,s:st})}catch(e){}}
-    else for(const o of this.conns.values())try{o.send({t:'st',s:st})}catch(e){}},
+  async enter(code){
+    const lobby=COOP.lobby;if(!lobby||!lobby.join){this.st('Co-op is not available here. Open the game from the Claude link.');return}
+    this.st('Joining room '+code+'…');
+    try{const r=await lobby.join('od'+code);this.code=code;this.active=true;await COOP.useRoom(r,code);
+      this.st('Room code: '+code+' — tell your friends to type it and press Join',true);$('netCode').value=code}
+    catch(e){this.st('Could not join the room ('+((e&&e.code)||'error')+'). Try again.')}},
+  create(){this.enter(String(1000+Math.floor(Math.random()*9000)))},
+  join(raw){const code=String(raw||'').replace(/\D/g,'').slice(0,4);if(code.length!==4){this.st('Type the 4-digit room code');return}this.enter(code)},
+  send(){}
+};
+
+// ===================== Hide & Seek (2–10 players): presence-only, no extra network =====================
+// Every player publishes st.hs = {rd,sk,z:[x,z,r],t0,hT,sT,f,fd,end}; the player who presses Start is the host of the round.
+const CAMO=[['House pink','#c9a090'],['Beige wall','#d8c9a8'],['Grey wall','#a8a8a2'],['Brick','#9a5a44'],['Leaves','#3f6b34'],['Dark green','#2c4a28'],['Sand','#d8c49a'],['Asphalt','#4a4a4c']];
+function camoOutfit(hex){const h=parseInt(hex.slice(1),16);return {shirt:h,tee1:hex,tee2:hex,jeans:h,cuff:h,shoe:h,sole:h,hair:h,hair2:h,skin:hex,iris:hex,brow:hex}}
+const HS={on:false,rd:0,role:'',sk:'',zone:null,t0:0,hT:60,sT:300,fd:[],myFound:false,camo:null,host:false,ring:null,out:0,msgT:0,fin:'',
+  now(){return Date.now()},
+  phase(){if(!this.on)return '';const t=(this.now()-this.t0)/1000;return t<this.hT?'hide':(t<this.hT+this.sT?'seek':'over')},
+  left(){const t=(this.now()-this.t0)/1000;return this.phase()==='hide'?this.hT-t:this.hT+this.sT-t},
+  me(){return COOP.myId||'me'},
+  pub(){if(!this.rd)return null;const o={rd:this.rd,sk:this.sk,z:this.zone,t0:this.t0,hT:this.hT,sT:this.sT,f:this.myFound?1:0};if(this.fd.length)o.fd=this.fd.slice(0,12);if(!this.on)o.end=1;return o},
+  hiders(){const a=[];for(const R of COOP.peers.values()){const h=R.st&&R.st.hs;if(h&&h.rd===this.rd&&R.peer!==this.sk&&R.st.in&&!h.end)a.push(R)}return a},
+  start(radius){if(!started)return;const all=[COOP.myId||'me'];for(const R of COOP.peers.values())if(R.st&&R.st.in&&R.peer)all.push(R.peer);
+    const sk=all[Math.floor(Math.random()*all.length)];this.begin({rd:Math.floor(this.now()/1000),sk,z:[Math.round(player.x),Math.round(player.z),radius],t0:this.now()+1500,hT:60,sT:300},true);COOP.push(true)},
+  begin(h,host){this.on=true;this.host=!!host;this.rd=h.rd;this.sk=h.sk;this.zone=h.z;this.t0=h.t0;this.hT=h.hT;this.sT=h.sT;this.fd=[];this.myFound=false;this.fin='';this.out=0;
+    this.role=(this.sk===this.me())?'S':'H';this.makeRing();
+    if(PORTAL.cur)PORTAL.exit();
+    if(this.role==='H'){toast('Hide!','60 seconds — pick a colour and stand still');this.setCamo(this.camo||CAMO[0][1])}else toast('You are the seeker','wait while they hide, then find everyone');
+    this.ui()},
+  stop(msg){if(!this.on)return;this.on=false;this.removeRing();this.setCamo(null);if(msg)toast(msg,'hide & seek');this.ui();COOP.push(true)},
+  makeRing(){this.removeRing();const [x,z,r]=this.zone;const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,60,72,1,true),new THREE.MeshBasicMaterial({color:0x44ff99,transparent:true,opacity:.16,side:THREE.DoubleSide,depthWrite:false,fog:false}));
+    m.position.set(x,groundH(x,z)+20,z);m.userData.dyn=true;m.renderOrder=5;scene.add(m);this.ring=m},
+  removeRing(){if(this.ring){scene.remove(this.ring);this.ring.geometry.dispose();this.ring=null}},
+  setCamo(hex){if(this.camo===hex&&PLR.camoSet===hex)return;this.camo=hex||this.camo;
+    const o=hex?camoOutfit(hex):(OUTFITS[COOP.me.outfit]||OUTFITS[0]).o;const old=PLR;const N=makePlayer(o);N.root.traverse(m=>{if(m.isMesh)m.castShadow=true});scene.remove(old.root);scene.add(N.root);PLR=N;PLR.camoSet=hex||null;COOP.push(true)},
+  catchTarget(){if(!this.on||this.role!=='S'||this.phase()!=='seek')return null;let best=null,bd=3.2;for(const R of this.hiders()){if(this.fd.includes(R.peer)||R.st.hs.f)continue;const d=Math.hypot(R.x-player.x,R.z-player.z);if(d<bd&&Math.abs(R.y-player.y)<2.5){bd=d;best=R}}return best},
+  hideTag(R){const h=R.st&&R.st.hs;return !!(this.on&&h&&h.rd===this.rd&&R.peer!==this.sk&&!h.f)},
+  tick(dt){
+    // adopt a round started by someone else
+    if(!this.on||this.rd){for(const R of COOP.peers.values()){const h=R.st&&R.st.hs;if(!h||!R.st.in)continue;
+      if(h.rd>this.rd&&!h.end&&started&&(this.now()-h.t0)/1000<h.hT+h.sT)this.begin(h,false)}}
+    if(!this.on){this.bar();return}
+    for(const R of COOP.peers.values()){const h=R.st&&R.st.hs;if(h&&h.rd===this.rd&&h.end&&R.peer===this.sk&&!this.host){this.stop('Round ended');return}}
+    const ph=this.phase();
+    // found?
+    if(this.role==='H'&&!this.myFound){for(const R of COOP.peers.values()){const h=R.st&&R.st.hs;if(h&&h.rd===this.rd&&R.peer===this.sk&&h.fd&&h.fd.includes(this.me())){this.myFound=true;this.setCamo(null);toast('You were found!','spectate and wait for the round to end');COOP.push(true)}}}
+    // finish conditions
+    if(ph==='over'){this.fin=this.fin||'time';this.stop(this.role==='S'?'Time is up — the hiders win':(this.myFound?'Round over':'Time is up — you survived!'));return}
+    if(ph==='seek'){const hs=this.hiders();const tot=hs.length+(this.role==='H'?1:0);const foundN=this.role==='S'?this.fd.length:(()=>{const R=[...COOP.peers.values()].find(r=>r.peer===this.sk);return R&&R.st.hs&&R.st.hs.fd?R.st.hs.fd.length:0})();
+      if(tot>0&&foundN>=tot&&(this.role==='S'||foundN>=tot)){this.stop(this.role==='S'?'You found everyone!':'Everyone was found — seeker wins');return}}
+    // zone
+    if(this.zone){const d=Math.hypot(player.x-this.zone[0],player.z-this.zone[1]);if(d>this.zone[2]){this.out+=dt;this.msgT-=dt;if(this.msgT<=0){this.msgT=2.5;toast('Back into the green zone!','you are outside the hide & seek area')}
+      if(this.out>10){teleportRaw(this.zone[0]+(player.x-this.zone[0])*.5,this.zone[1]+(player.z-this.zone[1])*.5,player.yaw);this.out=0}}else this.out=0}
+    // seeker is blindfolded during the hiding time
+    const v=$('hsVeil');if(v){const blind=this.role==='S'&&ph==='hide';v.style.display=blind?'flex':'none';if(blind)v.firstElementChild.textContent='Counting… '+Math.max(0,Math.ceil(this.left()))+' s — they are hiding'}
+    this.bar()},
+  bar(){const b=$('hsBar');if(!b)return;if(!this.on){b.style.display='none';return}const ph=this.phase(),l=Math.max(0,Math.ceil(this.left()));const m=Math.floor(l/60),s=String(l%60).padStart(2,'0');
+    const hs=this.hiders();const tot=hs.length+(this.role==='H'?1:0);const fo=this.role==='S'?this.fd.length:(this.myFound?1:0);
+    b.style.display='block';b.textContent=(this.role==='S'?'🔍 SEEKER':'🙈 HIDER')+' · '+(ph==='hide'?'hiding ':'seeking ')+m+':'+s+(this.role==='S'?' · found '+fo+'/'+tot:(this.myFound?' · you are found':''))},
+  ui(){const p=$('hsUI');if(!p)return;const on=this.on;$('hsIdle').style.display=on?'none':'block';$('hsRun').style.display=on?'block':'none';
+    $('hsSw').style.display=(on&&this.role==='H')?'flex':'none';$('hsRole').textContent=on?(this.role==='S'?'You are the seeker. Get close to a hider and press Catch.':'You are hiding. Choose your colour and stand still near matching walls or trees.'):''},
+  build(){
+    const css=document.createElement('style');css.textContent='#hsBar{position:absolute;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--glass2);border:1px solid var(--line);border-radius:999px;padding:7px 16px;font-weight:700;font-size:14px;pointer-events:none;display:none;white-space:nowrap}'+
+      '#hsUI{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(360px,calc(100vw - 32px));background:var(--glass2);border:1px solid var(--line);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:10px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}'+
+      '#hsUI .row button{padding:9px 12px}#hsSw{flex-wrap:wrap;gap:6px}#hsSw button{width:44px;height:44px;border-radius:12px;padding:0}#hsVeil{position:absolute;inset:0;background:#05090c;display:none;align-items:center;justify-content:center;font-family:var(--f-disp);font-size:clamp(20px,5vw,34px);text-align:center;padding:24px;z-index:5}';
+    document.head.appendChild(css);const hud=$('hud');
+    const bar=document.createElement('div');bar.id='hsBar';hud.appendChild(bar);
+    const veil=document.createElement('div');veil.id='hsVeil';veil.appendChild(document.createElement('div'));hud.appendChild(veil);
+    const ui=document.createElement('div');ui.id='hsUI';ui.hidden=true;
+    ui.innerHTML='<div class="spkTop"><b>Hide &amp; Seek</b><button id="hsClose" aria-label="Close">×</button></div>'+
+      '<div id="hsIdle"><small style="color:var(--muted);font-size:12px;line-height:1.45">2–10 players. Everyone near you in the room joins automatically. One random player seeks; the others hide inside the green zone. The zone is centred where you stand now.</small>'+
+      '<div class="row" style="margin-top:8px"><label>Zone</label><button data-r="80">Small</button><button data-r="150" class="on">Medium</button><button data-r="300">Large</button></div>'+
+      '<button id="hsStart" style="margin-top:10px;width:100%;background:var(--sun);color:var(--ink);border-color:var(--sun)">Start round</button></div>'+
+      '<div id="hsRun" style="display:none"><div id="hsRole" style="font-size:14px;line-height:1.45"></div><div id="hsSw" class="row" style="margin-top:8px"></div><button id="hsEnd" style="margin-top:10px;width:100%">End round</button></div>';
+    hud.appendChild(ui);let rad=150;
+    ui.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{rad=+b.dataset.r;ui.querySelectorAll('[data-r]').forEach(x=>x.classList.toggle('on',x===b))});
+    const sw=ui.querySelector('#hsSw');CAMO.forEach(([n,hex])=>{const b=document.createElement('button');b.title=n;b.style.background=hex;b.setAttribute('aria-label',n);b.onclick=()=>{if(this.on&&this.role==='H'&&!this.myFound)this.setCamo(hex)};sw.appendChild(b)});
+    $('hsClose').onclick=()=>{ui.hidden=true};$('hsStart').onclick=()=>{ui.hidden=true;this.start(rad)};$('hsEnd').onclick=()=>{ui.hidden=true;this.stop('Round ended')};
+    const tb=$('topBtns');const hb=document.createElement('button');hb.id='bHS';hb.textContent='Hide & Seek';hb.onclick=()=>{ui.hidden=!ui.hidden;this.ui()};tb.appendChild(hb);
+    for(const k of ['keydown','keyup'])addEventListener(k,e=>{if(started&&k==='keydown'&&e.code==='KeyH'&&document.activeElement.tagName!=='INPUT'){ui.hidden=!ui.hidden;this.ui()}});
+    INTERACT.push({x:0,z:0,r:1e9,label:'Catch!',cond:()=>!!this.catchTarget(),fn:()=>{const R=this.catchTarget();if(!R)return;this.fd.push(R.peer);toast('Found '+((R.st&&R.st.n)||'a hider')+'!',this.fd.length+' found');COOP.push(true);if(window.AUD)AUD.beep()}});
+    // no hiding indoors during a round
+    const pe=PORTAL.enter.bind(PORTAL);PORTAL.enter=function(...a){if(HS.on){toast('Not now','no hiding indoors during hide & seek');return}return pe(...a)};
+    ANIM.push(dt=>HS.tick(dt));this.ui()}
 };

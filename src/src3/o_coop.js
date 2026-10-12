@@ -41,22 +41,27 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
     addEventListener('keydown',e=>{if(!started||document.activeElement===ci)return;if(e.code==='KeyT'){e.preventDefault();this.openChat()}if(e.code==='KeyG')this.goTo(this.nearest())})},
   markOutfit(){document.querySelectorAll('#coOutfits button').forEach(b=>b.classList.toggle('on',+b.dataset.o===this.me.outfit))},
   status(t){const s=$('coStatus');if(s)s.textContent=t},
-  online(){return !!this.room||NET.active},
+  online(){return !!this.room},
   async init(){
     this.status('Co-op: connecting…');
     let room=null;try{if(window.claude&&window.claude.use)room=await window.claude.use('room')}catch(e){room=null}
     if(!room){this.status('Claude co-op is off here — use a room code below to play with a friend.');return}
-    this.room=room;this.ok=true;
-    room.onPeers(ch=>this.onPeers(ch),e=>{this.ok=false;this.status('Co-op disconnected');this.clearAll()});
-    room.onConnection(c=>{this.status(c?this.countText():'Co-op: reconnecting…')});
-    try{await room.presence({v:1,in:0,n:this.nameOf()})}catch(e){}
+    this.lobby=room;this.ok=true;await this.useRoom(room,'');
   },
+  // switch the active room: the shared lobby, or a private named room made from a 4-digit code
+  async useRoom(room,code){
+    for(const u of this.unsubs||[])try{u()}catch(e){}this.unsubs=[];this.clearAll();this.room=room;this.code=code;
+    this.unsubs.push(room.onPeers(ch=>this.onPeers(ch),e=>{this.ok=false;this.status('Co-op disconnected');this.clearAll()}));
+    this.unsubs.push(room.onConnection(c=>{this.status(c?this.countText():'Co-op: reconnecting…')}));
+    try{await room.presence({v:1,in:started?1:0,n:this.nameOf()})}catch(e){}
+    if(code&&this.lobby&&this.lobby!==room)try{await this.lobby.presence({v:1,in:0,n:this.nameOf(),hid:1})}catch(e){}
+    this.last='';this.push(true);this.status(this.countText())},
   countText(){const all=[...this.peers.values()];const n=all.filter(p=>p.st&&p.st.in).length,m=all.length-n;
     if(!all.length)return 'Co-op: on, waiting for friends — nobody else has the game open';
     return 'Co-op: '+(n?n+' playing':'')+(n&&m?', ':'')+(m?m+' in the menu':'')},
   onPeers(ch){
     const seen=new Set();
-    for(const p of ch.peers){if(p.isMe||p.kind!=='viewer')continue;seen.add(p.peer);
+    for(const p of ch.peers){if(p.isMe){this.myId=p.peer;continue}if(p.kind!=='viewer')continue;seen.add(p.peer);
       const st=p.presence||{};let R=this.peers.get(p.peer);
       if(!R){R={peer:p.peer,st:null,P:null,tag:null,tagName:'',bub:null,bubT:0,sayT:0,x:0,y:0,z:0,yaw:0,has:false,outfit:-1};this.peers.set(p.peer,R)}
       const wasIn=R.st&&R.st.in;R.st=st;
@@ -95,6 +100,7 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
     if(ret){st.rx=r2(ret.x);st.rz=r2(ret.z);st.rr=r2(ret.yaw||0);st.zt=(ind&&ind.title)||''}
     if(typeof DRIVE!=='undefined'&&DRIVE.on&&DRIVE.car){st.x=r2(DRIVE.car.x);st.z=r2(DRIVE.car.z);st.y=r2(DRIVE.car.y);st.r=r2(DRIVE.car.yaw||0)}
     if(this.say){st.say=this.say.m;st.sayT=this.say.t}
+    if(typeof HS!=='undefined'){const h=HS.pub();if(h)st.hs=h;if(HS.on&&HS.role==='H'&&HS.camo&&!HS.myFound)st.cc=parseInt(HS.camo.slice(1),16)}
     const key=JSON.stringify(st);const now=performance.now();
     if(NET.active&&(force||key!==this.lastN||now-(this.lastNT||0)>1000)){this.lastN=key;this.lastNT=now;NET.send(st)}
     if(this.room&&(force||key!==this.last)){this.last=key;this.room.presence(st).catch(()=>{})}},
@@ -114,7 +120,7 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
     for(const R of this.peers.values()){const s=R.st;
       const show=!!(s&&s.in&&(s.zn||'')===zn&&typeof s.x==='number');
       if(!show){if(R.P)R.P.root.visible=false;if(R.lo)R.lo.visible=false;if(R.tag)R.tag.visible=false;if(R.bub)R.bub.visible=false;R.has=false;continue}
-      if(!R.P||R.outfit!==(s.o|0)){if(R.P)scene.remove(R.P.root);R.outfit=s.o|0;if(R.lo){scene.remove(R.lo);R.lo.geometry.dispose()}R.P=makePlayer((OUTFITS[R.outfit]||OUTFITS[0]).o);R.P.can.visible=false;R.P.scooter.visible=false;R.P.speaker.visible=false;R.lo=bakeAvatar(R.P);scene.add(R.lo);mergeAvatar(R.P.root);R.P.root.traverse(o=>{if(o.isMesh)o.castShadow=true});scene.add(R.P.root);R.has=false}
+      const okey=s.cc?100000+(s.cc|0):(s.o|0);if(!R.P||R.outfit!==okey){if(R.P)scene.remove(R.P.root);R.outfit=okey;if(R.lo){scene.remove(R.lo);R.lo.geometry.dispose()}R.P=makePlayer(s.cc?camoOutfit('#'+(s.cc|0).toString(16).padStart(6,'0')):(OUTFITS[s.o|0]||OUTFITS[0]).o);R.P.can.visible=false;R.P.scooter.visible=false;R.P.speaker.visible=false;R.lo=bakeAvatar(R.P);scene.add(R.lo);mergeAvatar(R.P.root);R.P.root.traverse(o=>{if(o.isMesh)o.castShadow=true});scene.add(R.P.root);R.has=false}
       const nm=(s.n||'Friend').slice(0,16);
       if(!R.tag||R.tagName!==nm){if(R.tag){scene.remove(R.tag);R.tag.material.map.dispose()}R.tag=labelSprite([nm],{w:512,h:120,size:72,color:'#0b1b22',bg:'rgba(242,193,78,.95)',round:50,depthTest:false,scale:1});R.tag.material.sizeAttenuation=false;R.tag.scale.multiplyScalar(.055);R.tag.renderOrder=998;scene.add(R.tag);R.tagName=nm}
       if(s.say&&s.sayT&&s.sayT!==R.sayT){const first=R.sayT===0&&!R.fresh;R.sayT=s.sayT;if(!first)this.showBubble(R,String(s.say).slice(0,80))}R.fresh=true;
@@ -125,14 +131,14 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
       const m=s.m||'walk';
       if(P.root.visible){if(m==='car'||m==='tram'||m==='sit')animPlayer(P,{spd:0,mode:'sit'},dt);else animPlayer(P,{spd:s.s||0,mode:m==='air'?'air':(m==='scoot'?'scoot':'walk')},dt)}else{R.lo.position.y+=Math.abs(Math.sin(performance.now()*.008))*.04*Math.min(1,(s.s||0))}
       if(m==='car'||m==='tram')P.root.position.y+=.35;
-      R.tag.visible=true;R.tag.position.set(R.x,R.y+2.15,R.z);
+      R.tag.visible=!(typeof HS!=='undefined'&&HS.hideTag(R));R.tag.position.set(R.x,R.y+2.15,R.z);
       if(R.bub){R.bubT-=dt;R.bub.position.set(R.x,R.y+2.6,R.z);R.bub.visible=R.bubT>0}}
     this.listT=(this.listT||0)-dt;if(this.listT<=0){this.listT=1;this.renderList()}},
   renderList(){const L=$('coList'),bf=$('bFriends');if(!L||!bf)return;
     const on=[...this.peers.values()].filter(R=>R.st&&R.st.in);const menu=[...this.peers.values()].filter(R=>!(R.st&&R.st.in));bf.textContent='👥 '+on.length+(menu.length?' (+'+menu.length+')':'');bf.hidden=!this.online();
     L.hidden=!this.listOpen||!this.online();if(L.hidden)return;L.innerHTML='';
     for(const R of menu){const d=document.createElement('div');d.className='coEmpty';d.textContent=((R.st&&R.st.n)||'A friend')+' has the game open but is still in the menu';L.appendChild(d)}
-    if(!on.length&&!menu.length){const d=document.createElement('div');d.className='coEmpty';d.textContent=(NET.active&&NET.host?'Room code '+NET.code+' — send it to your friend. They type it in the menu and press Join.':'Nobody else is here yet.');L.appendChild(d);return}
+    if(!on.length&&!menu.length){const d=document.createElement('div');d.className='coEmpty';d.textContent=(NET.active?'Room code '+NET.code+' — send it to your friend. They type it in the menu and press Join.':'Nobody else is here yet.');L.appendChild(d);return}
     const me=PORTAL.cur?(PORTAL.ret||player):player;
     for(const R of on){const s=R.st;const b=document.createElement('button');const x=s.zn?s.rx:s.x,z=s.zn?s.rz:s.z;
       const nm=document.createElement('b');nm.textContent=s.n||'Friend';const sm=document.createElement('small');
@@ -141,37 +147,16 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
 };
 function teleportRawNear(x,z,yaw){player.x=x-Math.sin(yaw||0)*1.5;player.z=z-Math.cos(yaw||0)*1.5;player.vx=player.vz=0;toast('Next to your friend','')}
 
-// ===================== room codes over WebRTC (PeerJS) — works without a Claude account =====================
-// The host's browser is the hub: guests send their state to the host, the host relays everyone to everyone.
-const NET={peer:null,conns:new Map(),host:false,code:'',active:false,
+// ===================== room codes: private named rooms through the Claude room (no WebRTC, works on iPad) =====================
+const NET={active:false,code:'',
   st(t,ok){const e=$('netStatus');if(e){e.textContent=t;e.classList.toggle('ok',!!ok)}},
-  reset(){try{if(this.peer)this.peer.destroy()}catch(e){}this.peer=null;for(const id of this.conns.keys())COOP.netRemove(id);this.conns.clear();this.active=false;this.host=false},
-  opts(){return Object.assign({debug:0},window.__PEER_OPTS||{})},
-  create(){if(!window.RTCPeerConnection){this.st('Room codes are blocked inside the Claude page. Sign in to Claude instead — co-op then works automatically.');return}if(typeof Peer==='undefined'){this.st('Online play could not load');return}this.reset();
-    const code=String(1000+Math.floor(Math.random()*9000));this.code=code;this.host=true;this.st('Creating room…');
-    const p=new Peer('odesa-mp-'+code,this.opts());this.peer=p;
-    p.on('open',()=>{this.active=true;this.st('Room code: '+code+' — send it to your friend, then press Play',true);$('netCode').value=code;COOP.renderList()});
-    p.on('connection',c=>this.addConn(c));
-    p.on('error',e=>{if(e.type==='unavailable-id'){this.create();return}this.st('Room error: '+(e.type||'unknown')+' — try Create again')});
-    p.on('disconnected',()=>{try{p.reconnect()}catch(e){}})},
-  join(raw){const code=String(raw||'').replace(/\D/g,'').slice(0,4);if(code.length!==4){this.st('Type the 4-digit room code');return}
-    if(!window.RTCPeerConnection){this.st('Room codes are blocked inside the Claude page. Sign in to Claude instead — co-op then works automatically.');return}
-    if(typeof Peer==='undefined'){this.st('Online play could not load');return}this.reset();this.code=code;this.st('Joining room '+code+'…');
-    const p=new Peer(this.opts());this.peer=p;
-    p.on('open',()=>{const c=p.connect('odesa-mp-'+code,{reliable:true});this.addConn(c);setTimeout(()=>{if(!this.conns.size)this.st('Still connecting to '+code+'… check the code')},8000)});
-    p.on('error',e=>{this.st(e.type==='peer-unavailable'?'Room '+code+' not found — check the code (the host must keep the game open)':'Connection error: '+(e.type||'unknown'))})},
-  addConn(c){c.on('open',()=>{this.conns.set(c.peer,c);this.active=true;
-      this.st(this.host?('Room code: '+this.code+' — '+this.conns.size+' friend'+(this.conns.size>1?'s':'')+' connected'):('Connected to room '+this.code),true);COOP.push(true);COOP.renderList()});
-    c.on('data',d=>this.onData(c,d));
-    const gone=()=>{if(!this.conns.has(c.peer))return;this.conns.delete(c.peer);COOP.netRemove(c.peer);
-      if(this.host){for(const o of this.conns.values())try{o.send({t:'bye',id:c.peer})}catch(e){}this.st('Room code: '+this.code+' — '+this.conns.size+' connected',true)}
-      else{for(const k of [...COOP.peers.keys()])if(k.startsWith('n:'))COOP.netRemove(k.slice(2));this.active=false;this.st('The room closed (host left)');if(started)toast('Room closed','the host left the game')}};
-    c.on('close',gone);c.on('error',gone)},
-  onData(c,d){if(!d||typeof d!=='object')return;
-    if(d.t==='st'&&d.s&&typeof d.s==='object'){
-      if(this.host){COOP.netUpsert(c.peer,d.s);for(const [id,o] of this.conns)if(id!==c.peer)try{o.send({t:'st',id:c.peer,s:d.s})}catch(e){}}
-      else{const id=typeof d.id==='string'?d.id:c.peer;if(id===this.peer.id)return;COOP.netUpsert(id,d.s)}}
-    else if(d.t==='bye'&&!this.host&&typeof d.id==='string')COOP.netRemove(d.id)},
-  send(st){if(!this.active)return;if(this.host){for(const o of this.conns.values())try{o.send({t:'st',id:this.peer.id,s:st})}catch(e){}}
-    else for(const o of this.conns.values())try{o.send({t:'st',s:st})}catch(e){}},
+  async enter(code){
+    const lobby=COOP.lobby;if(!lobby||!lobby.join){this.st('Co-op is not available here. Open the game from the Claude link.');return}
+    this.st('Joining room '+code+'…');
+    try{const r=await lobby.join('od'+code);this.code=code;this.active=true;await COOP.useRoom(r,code);
+      this.st('Room code: '+code+' — tell your friends to type it and press Join',true);$('netCode').value=code}
+    catch(e){this.st('Could not join the room ('+((e&&e.code)||'error')+'). Try again.')}},
+  create(){this.enter(String(1000+Math.floor(Math.random()*9000)))},
+  join(raw){const code=String(raw||'').replace(/\D/g,'').slice(0,4);if(code.length!==4){this.st('Type the 4-digit room code');return}this.enter(code)},
+  send(){}
 };
