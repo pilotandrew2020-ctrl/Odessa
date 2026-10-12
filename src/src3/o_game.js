@@ -17,7 +17,7 @@ function nearBench(maxd){let best=null,bd=maxd;const chk=b=>{const d=Math.hypot(
   if(id0>=0){const i0=id0%NCX,j0=Math.floor(id0/NCX);for(let j=j0-1;j<=j0+1;j++)for(let i=i0-1;i<=i0+1;i++){const c=chunks.get(j*NCX+i);if(c&&c.benches)for(const b of c.benches)chk(b)}}
   return best}
 INTERACT.push({x:0,z:0,r:1e9,label:'Get in the car',cond:()=>!!(DRIVE.car&&!DRIVE.on&&!player.sit&&Math.hypot(DRIVE.car.x-player.x,DRIVE.car.z-player.z)<3.4),fn:toggleCar});
-INTERACT.push({x:0,z:0,r:1e9,label:'Sit on the bench',cond:()=>{if(player.sit||player.scoot||(typeof DRIVE!=='undefined'&&DRIVE.on)||curIndoor)return false;benchNear=nearBench(1.6);return !!benchNear},
+INTERACT.push({x:0,z:0,r:1e9,label:'Sit on the bench',cond:()=>{if(player.sit||player.scoot||(typeof DRIVE!=='undefined'&&DRIVE.on)||(curIndoor&&curIndoor.name!=='station'))return false;benchNear=nearBench(1.6);return !!benchNear},
   fn:()=>{const b=benchNear;if(!b)return;player.sit={x:b.x+Math.sin(b.ry)*.04,z:b.z+Math.cos(b.ry)*.04,y:b.y+.03,yaw:b.ry};player.vx=player.vz=0;cam.yaw=b.ry;cam.pitch=Math.max(cam.pitch,.25);toast('Taking a rest','move to stand up')}});
 const DOOR_KIND={2:'pharmacy',0:'market',1:'market',27:'market',34:'market',8:'market',33:'market',25:'market'};
 const DOOR_LBL={pharmacy:'Enter the pharmacy',market:'Enter the shop'};
@@ -192,7 +192,7 @@ function* buildChunkGen(id){
   const r=rng(id*31+5);const parked=[];
   for(const L of lots){for(let q=-2;q<=2;q++){if(r()<.45)continue;const x=L.x+L.tx*q*2.8,z=L.z+L.tz*q*2.8;
     if(solid(x,z,1.6)||nearRoad(id,x,z,1.2)||blockedStatic(x,z,2))continue;
-    parked.push({x,y:groundH(x,z)+.02,z,yaw:Math.atan2(L.nx,L.nz)+(r()<.5?0:Math.PI),type:r()<.15?2:(r()<.5?1:0),col:CAR_COLS[Math.floor(r()*CAR_COLS.length)],pitch:0,roll:0});lobb.push(x,z,1.0,2.25,L.tx,L.tz)}}
+    parked.push({x,y:groundH(x,z)+.02,z,yaw:Math.atan2(L.nx,L.nz)+(r()<.5?0:Math.PI),type:pickCarType(r),col:CAR_COLS[Math.floor(r()*CAR_COLS.length)],pitch:0,roll:0});lobb.push(x,z,1.0,2.25,L.tx,L.tz)}}
   // OSM point features
   for(const f of feats){const y=groundH(f.x,f.z);
     if(f.k===0){if(!solid(f.x,f.z,.8))treePts.push([f.x,f.z,f.a?3:(r()<.5?0:1),.8+r()*.5])}
@@ -305,7 +305,7 @@ function collide(x,z,r,y){
   }
   return [x,z];
 }
-const CAR_OBB=[];const CAR_HL=[2.35,2.05,2.4,2.85],CAR_HH=[1.55,1.55,1.85,2.7];
+const CAR_OBB=[];const CAR_HL=CAR_DEFS.map(d=>d.front+.15),CAR_HH=CAR_DEFS.map(d=>d.top.reduce((a,t)=>Math.max(a,t[1]),0)+.1);
 function refreshCarObb(){CAR_OBB.length=0;for(const t of TRAMS){if(Math.abs(t.x-player.x)>14||Math.abs(t.z-player.z)>14)continue;CAR_OBB.push(t.x,t.z,1.3,7.6,Math.cos(t.yaw),-Math.sin(t.yaw))}if(DRIVE.car&&!DRIVE.on){const c=DRIVE.car;CAR_OBB.push(c.x,c.z,.95,2.15,Math.cos(c.yaw),-Math.sin(c.yaw))}for(const c of CARS){if(Math.abs(c.x-player.x)>12||Math.abs(c.z-player.z)>12)continue;const ca=Math.cos(c.yaw),sa=Math.sin(c.yaw);CAR_OBB.push(c.x,c.z,.95,CAR_HL[c.type]||2.3,ca,-sa)}}
 function carAt(x,z,y,m){if(typeof CARS==='undefined')return false;const L=DRIVE.car&&!DRIVE.on?CARS.concat([DRIVE.car]):CARS;for(const c of L){const dx=x-c.x,dz=z-c.z;if(Math.abs(dx)>4||Math.abs(dz)>4)continue;if(y>c.y+(CAR_HH[c.type]||1.6)+.2)continue;
   const fx=Math.sin(c.yaw),fz=Math.cos(c.yaw);const a=dx*fx+dz*fz,b=dx*fz-dz*fx;if(Math.abs(a)<(CAR_HL[c.type]||2.3)+m&&Math.abs(b)<1+m)return true}return false}
@@ -458,7 +458,7 @@ function updateHUD(dt){
   let best=null,bd=1e9;for(const it of INTERACT){if(it.cond&&!it.cond())continue;const d=Math.hypot(it.x-player.x,it.z-player.z);if(d<it.r&&Math.abs((it.y||player.y)-player.y)<2.5&&d<bd){bd=d;best=it}}
   if(player.sit)best={label:'Stand up',fn:()=>{player.sit=null}};
   if(DRIVE.on)best={label:'Get out of the car',fn:exitCar};
-  if(RIDE.on)best={label:'Get off the tram',fn:leaveTram};
+  if(RIDE.on)best={label:RIDE.tram&&RIDE.tram.kind==='cable'?'Get off the cable car':'Get off the tram',fn:leaveTram};
   curAct=best;const ab=$('bAct');if(best){ab.hidden=false;ab.textContent=(TOUCH?'':'E · ')+best.label}else ab.hidden=true;
   if(miniT<=0){miniT=.1;drawMini()}
 }

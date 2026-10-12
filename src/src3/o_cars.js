@@ -16,25 +16,74 @@ const CAR_SURF=`
 `;
 let CAR_MAT=null;
 function carShape(pts){const s=new THREE.Shape();s.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)s.lineTo(pts[i][0],pts[i][1]);s.closePath();return s}
+// ---- lofted car body: cross-sections along the length (rounded shoulders, tumblehome, tapered nose/tail) ----
+function carTopAt(top,z){if(z<=top[0][0])return top[0][1];for(let i=0;i<top.length-1;i++){if(z<=top[i+1][0]){const t=(z-top[i][0])/(top[i+1][0]-top[i][0]||1);return top[i][1]+(top[i+1][1]-top[i][1])*t}}return top[top.length-1][1]}
+function carSection(def,z){
+  const half=def.W/2,y0=def.y0,hb=def.hb,yt=carTopAt(def.top,z);
+  const e=Math.min(z-def.rear,def.front-z),rd=def.round||.8;const wf=e>=.6?1:(rd+(1-rd)*Math.sqrt(Math.max(0,e/.6)));
+  const g=Math.max(0,Math.min(1,(yt-hb)/.12)),tum=def.tum||.8,h=half*wf,yb=Math.min(yt,hb);
+  const wg=t=>half*(1-(1-tum)*t)*wf;
+  const deck=[[h*.9,y0],[h,y0+.1],[h,y0+(yt-y0)*.55],[h,yt-.1],[h-.05,yt-.04],[h-.15,yt-.008],[h*.6,yt],[0,yt]];
+  const gh=[[h*.9,y0],[h,y0+.1],[h,yb-.12],[h-.025,yb+.01],[wg(.5),yb+(yt-yb)*.5],[wg(1)+.02,yt-.1*(yt-yb)-.02],[wg(1)-.1,yt],[0,yt]];
+  const R=deck.map((p,k)=>[p[0]+(gh[k][0]-p[0])*g,p[1]+(gh[k][1]-p[1])*g,z]);
+  const ring=R.map(p=>[p[0],p[1],p[2]]);for(let k=6;k>=0;k--)ring.push([-R[k][0],R[k][1],z]);
+  return {ring,R,yt,g,wg,yb};
+}
 function buildCarType(def){
   const g=new GB({position:3,normal:3,aCol:3,aM:1});
-  const addGeo=(geo,m,col,tf)=>{const G=geo.index?geo.toNonIndexed():geo;G.computeVertexNormals();const p=G.attributes.position,n=G.attributes.normal;
-    for(let i=0;i<p.count;i+=3){const ids=[];for(let j=0;j<3;j++){let v=[p.getX(i+j),p.getY(i+j),p.getZ(i+j)],nn=[n.getX(i+j),n.getY(i+j),n.getZ(i+j)];if(tf){v=tf(v);nn=tf(nn,true)}ids.push(g.v({position:v,normal:nn,aCol:col,aM:m}))}if(tf)g.tri(ids[0],ids[2],ids[1]);else g.tri(...ids)}};
-  // extruded body: profile in (x=forward,y=up), extrude along width -> map (x,y,z)->(z_world=x, y, x_world=z-W/2)
-  const W=def.W,bv=.08;
-  const tfm=(v,isN)=>isN?[v[2],v[1],v[0]]:[v[2]-(W/2-bv)*0,v[1],v[0]];
-  const body=new THREE.ExtrudeGeometry(carShape(def.body),{depth:W-2*bv,bevelEnabled:true,bevelThickness:bv,bevelSize:bv,bevelSegments:2,curveSegments:2});body.translate(0,0,-(W-2*bv)/2);
-  addGeo(body,0,[1,1,1],(v,isN)=>isN?[v[2],v[1],v[0]]:[v[2],v[1],v[0]]);
-  const glass=new THREE.ExtrudeGeometry(carShape(def.glass),{depth:W-2*bv+.03,bevelEnabled:false});glass.translate(0,0,-(W-2*bv+.03)/2);
-  addGeo(glass,1,[0,0,0],(v,isN)=>isN?[v[2],v[1],v[0]]:[v[2],v[1],v[0]]);
-  // lights / bumpers / plates
-  const box=(cx,cy,cz,sx,sy,sz,m,col)=>{const b=new THREE.BoxGeometry(sx,sy,sz);b.translate(cx,cy,cz);addGeo(b,m,col)};
+  const W=def.W;def.y0=def.y0||.28;def.hb=def.hb||def.glass[0][1];
+  const V=(p,n,col,m)=>g.v({position:p,normal:n,aCol:col,aM:m});
+  // slice list
+  const zs=[def.rear];for(const t of def.top){if(t[0]>def.rear+.05&&t[0]<def.front-.05)zs.push(t[0])}zs.push(def.front);
+  const zz=[];for(let i=0;i<zs.length-1;i++){const n=Math.max(1,Math.round((zs[i+1]-zs[i])/.4));for(let k=0;k<n;k++)zz.push(zs[i]+(zs[i+1]-zs[i])*k/n)}zz.push(def.front);
+  const S=zz.map(z=>carSection(def,z));const NR=15,NS=S.length;
+  // smooth normals from the ring/length tangents
+  const base=g.n;
+  for(let i=0;i<NS;i++)for(let k=0;k<NR;k++){
+    const p=S[i].ring[k],pk0=S[i].ring[Math.max(0,k-1)],pk1=S[i].ring[Math.min(NR-1,k+1)];
+    const pn=S[Math.min(NS-1,i+1)].ring[k],pp=S[Math.max(0,i-1)].ring[k];
+    const t1=[pk1[0]-pk0[0],pk1[1]-pk0[1],pk1[2]-pk0[2]],t2=[pn[0]-pp[0],pn[1]-pp[1],pn[2]-pp[2]];
+    let n=[t1[1]*t2[2]-t1[2]*t2[1],t1[2]*t2[0]-t1[0]*t2[2],t1[0]*t2[1]-t1[1]*t2[0]];const l=Math.hypot(...n)||1;n=n.map(v=>v/l);
+    const cy=(def.y0+S[i].yt)/2;if(n[0]*p[0]+n[1]*(p[1]-cy)<0)n=n.map(v=>-v);
+    V(p,n,[1,1,1],0)}
+  for(let i=0;i<NS-1;i++)for(let k=0;k<NR-1;k++){const a=base+i*NR+k,b=a+1,c=base+(i+1)*NR+k,d=c+1;
+    // winding: make faces face outward (checked on the first quad)
+    g.tri(a,c,b);g.tri(b,c,d)}
+  // end caps
+  for(const [i,sg] of [[0,-1],[NS-1,1]]){const c0=g.n;for(let k=0;k<NR;k++)V(S[i].ring[k],[0,0,sg],[1,1,1],0);for(let k=1;k<NR-1;k++){if(sg>0)g.tri(c0,c0+k,c0+k+1);else g.tri(c0,c0+k+1,c0+k)}}
+  const geoSides=g.n;
+  // glass: side windows (split by pillars), windshield, rear window
+  const gl=def.glass;const zA=gl[0][0]+.1,zB=gl[gl.length-1][0]-.1;const pil=(def.pillars||[(zA+zB)/2]).slice().sort((a,b)=>a-b);
+  const addQuad=(P4,n,m,col)=>{const b0=g.n;for(const p of P4)V(p,n,col||[0,0,0],m);g.tri(b0,b0+1,b0+2);g.tri(b0,b0+2,b0+3);g.tri(b0,b0+2,b0+1);g.tri(b0,b0+3,b0+2)};
+  const segs=[];{let a=zA;for(const p of pil){segs.push([a,p-.05]);a=p+.05}segs.push([a,zB])}
+  for(const [za,zb] of segs){if(zb-za<.12)continue;const n=Math.max(1,Math.round((zb-za)/.15));
+    for(const sd of [-1,1])for(let i=0;i<n;i++){const z0=za+(zb-za)*i/n,z1=za+(zb-za)*(i+1)/n;const pts=[];
+      for(const z of [z0,z1]){const s=carSection(def,z);const R=s.R;const lo=[R[3][0]+(R[4][0]-R[3][0])*.14,R[3][1]+(R[4][1]-R[3][1])*.14];const up=[R[5][0]+(R[6][0]-R[5][0])*.25,R[5][1]+(R[6][1]-R[5][1])*.25-.012];
+        if(s.yt-s.yb<.12)continue;pts.push([lo,z],[up,z])}
+      if(pts.length<4)continue;const q=[pts[0],pts[1],pts[3],pts[2]].map(([p,z])=>[sd*(p[0]+.012),p[1],z]);addQuad(q,[sd,0,0],1)}}
+  const slab=(zs0,zs1,ytop)=>{const n=Math.max(2,Math.round(Math.abs(zs1-zs0)/.12));for(let i=0;i<n;i++){const z0=zs0+(zs1-zs0)*i/n,z1=zs0+(zs1-zs0)*(i+1)/n;const a=carSection(def,z0),b=carSection(def,z1);
+      const w0=a.R[6][0]-.04,w1=b.R[6][0]-.04;addQuad([[-w0,a.yt+.012,z0],[w0,a.yt+.012,z0],[w1,b.yt+.012,z1],[-w1,b.yt+.012,z1]],[0,1,0],1)}};
+  slab(gl[gl.length-2][0],gl[gl.length-1][0],0);                           // windshield
+  if(Math.abs(gl[1][0]-gl[0][0])>.1)slab(gl[0][0],gl[1][0],0);            // sloped rear glass
+  else{const s=carSection(def,def.rear);addQuad([[-W*.36,gl[0][1]+.02,def.rear-.012],[W*.36,gl[0][1]+.02,def.rear-.012],[W*.36,gl[1][1]-.04,def.rear-.012],[-W*.36,gl[1][1]-.04,def.rear-.012]],[0,0,-1],1)}  // upright rear window
+  // lights / bumpers / plates / grille / wheel arches / door seams
+  const box=(cx,cy,cz,sx,sy,sz,m,col)=>{const b=new THREE.BoxGeometry(sx,sy,sz);b.translate(cx,cy,cz);const G2=b.toNonIndexed();const p=G2.attributes.position,n=G2.attributes.normal;
+    for(let i=0;i<p.count;i+=3){const ids=[];for(let j=0;j<3;j++)ids.push(V([p.getX(i+j),p.getY(i+j),p.getZ(i+j)],[n.getX(i+j),n.getY(i+j),n.getZ(i+j)],col,m));g.tri(...ids)}};
   const fz=def.front,rz=def.rear;
   for(const s of [-1,1]){box(s*W*.33,def.hl,fz-.02,.34,.13,.06,2,[1,.95,.82]);box(s*W*.36,def.tl,rz+.02,.3,.12,.05,3,[.75,.04,.03])}
   box(0,.42,fz+.02,W*.92,.18,.08,6,[0,0,0]);box(0,.42,rz-.02,W*.92,.18,.08,6,[0,0,0]);
   box(0,.58,fz+.035,.52,.12,.02,7,[.93,.93,.9]);box(0,.62,rz-.035,.52,.12,.02,7,[.93,.93,.9]);
+  box(0,def.hl-.02,fz-.015,W*.42,.14,.05,6,[.03,.03,.03]);                       // grille
+  box(0,def.y0+.06,0,W*.84,.1,(fz-rz)*.94,6,[0,0,0]);                              // underbody
   if(def.sign)box(0,def.sign[1],def.sign[0],.9,.3,.04,8,[.95,.85,.3]);
-  if(def.mirror)for(const s of [-1,1])box(s*(W/2+.08),1.0,def.mirror,.16,.12,.08,0,[1,1,1]);
+  if(def.mirror)for(const s of [-1,1])box(s*(W/2+.08),def.hb+.04,def.mirror,.16,.12,.08,0,[1,1,1]);
+  for(const z of (def.doors||[def.wz[0]-.55,def.wz[1]+.55])){for(const s of [-1,1]){box(s*(W/2+.004),(def.y0+def.hb)/2+.05,z,.012,def.hb-def.y0-.2,.014,6,[0,0,0]);box(s*(W/2+.012),def.hb-.14,z+.32,.018,.025,.12,5,[.7,.7,.72])}}
+  for(const wz of def.wz)for(const s of [-1,1]){const cyl=new THREE.CylinderGeometry(def.wr*1.2,def.wr*1.2,.03,16);cyl.rotateZ(Math.PI/2);cyl.translate(s*(W/2+.002),def.wr,wz);
+    const G2=cyl.toNonIndexed();const p=G2.attributes.position,n=G2.attributes.normal;for(let i=0;i<p.count;i+=3){const ids=[];for(let j=0;j<3;j++)ids.push(V([p.getX(i+j),p.getY(i+j),p.getZ(i+j)],[n.getX(i+j),n.getY(i+j),n.getZ(i+j)],[0,0,0],6));g.tri(...ids)}}
+  // make sure the lofted shell faces outward: compare a normal with the triangle winding
+  {const A=g.a;const i0=g.idx[0],i1=g.idx[1],i2=g.idx[2];const P=i=>[A.position[i*3],A.position[i*3+1],A.position[i*3+2]],N=i=>[A.normal[i*3],A.normal[i*3+1],A.normal[i*3+2]];
+   const p0=P(i0),p1=P(i1),p2=P(i2),e1=[p1[0]-p0[0],p1[1]-p0[1],p1[2]-p0[2]],e2=[p2[0]-p0[0],p2[1]-p0[1],p2[2]-p0[2]];const fn=[e1[1]*e2[2]-e1[2]*e2[1],e1[2]*e2[0]-e1[0]*e2[2],e1[0]*e2[1]-e1[1]*e2[0]];const nn=N(i0);
+   if(fn[0]*nn[0]+fn[1]*nn[1]+fn[2]*nn[2]<0){for(let i=0;i<geoSides;i++){}const idx=g.idx;for(let t=0;t<idx.length;t+=3){if(idx[t]<geoSides&&idx[t+1]<geoSides){const tmp=idx[t+1];idx[t+1]=idx[t+2];idx[t+2]=tmp}}}}
   const geo=g.build();
   // wheel: tyre + rim
   const wg=new GB({position:3,normal:3,aCol:3,aM:1});
@@ -43,24 +92,38 @@ function buildCarType(def){
   for(const [ge,m] of [[tyre,4],[rim,5]]){const G=ge.toNonIndexed();const p=G.attributes.position,n=G.attributes.normal;for(let i=0;i<p.count;i+=3){const ids=[];for(let j=0;j<3;j++)ids.push(wg.v({position:[p.getX(i+j),p.getY(i+j),p.getZ(i+j)],normal:[n.getX(i+j),n.getY(i+j),n.getZ(i+j)],aCol:[0,0,0],aM:m}));wg.tri(...ids)}}
   return {geo,wgeo:wg.build(),W,L:def.L,wz:def.wz,wx:W/2-.08,wr:def.wr};
 }
+// side silhouettes (z forward, y up). top = roof/hood line, glass = window outline, round = plan rounding of nose/tail, tum = roof width / body width
 const CAR_DEFS=[
-  {L:4.4,W:1.74,wr:.31,wz:[1.32,-1.36],front:2.2,rear:-2.2,hl:.72,tl:.8,mirror:.95,
-   body:[[-2.2,.3],[-2.24,.78],[-1.95,.96],[-1.25,.99],[-.72,1.42],[.42,1.44],[1.02,1.0],[2.02,.86],[2.22,.62],[2.2,.3]],
+  {L:4.4,W:1.74,wr:.31,wz:[1.32,-1.36],front:2.2,rear:-2.2,hl:.72,tl:.8,mirror:.95,tum:.78,pillars:[-.1],
+   top:[[-2.2,.82],[-2.1,.95],[-1.25,.99],[-.72,1.42],[.42,1.44],[1.02,1.0],[2.02,.86],[2.2,.62]],
    glass:[[-1.18,1.0],[-.7,1.37],[.4,1.39],[.95,1.02]]},
-  {L:3.95,W:1.7,wr:.3,wz:[1.18,-1.22],front:1.98,rear:-1.97,hl:.74,tl:.95,mirror:.8,
-   body:[[-1.97,.3],[-1.98,1.0],[-1.75,1.42],[.3,1.47],[.92,1.0],[1.85,.86],[1.99,.6],[1.97,.3]],
+  {L:3.95,W:1.7,wr:.3,wz:[1.18,-1.22],front:1.98,rear:-1.97,hl:.74,tl:.95,mirror:.8,tum:.8,pillars:[-.35],
+   top:[[-1.97,.9],[-1.9,1.0],[-1.75,1.4],[.3,1.47],[.92,1.0],[1.85,.86],[1.98,.6]],
    glass:[[-1.85,1.02],[-1.65,1.38],[.28,1.42],[.85,1.02]]},
-  {L:4.6,W:1.9,wr:.37,wz:[1.42,-1.42],front:2.3,rear:-2.3,hl:.88,tl:1.05,mirror:.95,
-   body:[[-2.3,.38],[-2.32,1.15],[-2.1,1.72],[.55,1.76],[1.2,1.15],[2.2,1.02],[2.32,.7],[2.3,.38]],
+  {L:4.6,W:1.9,wr:.37,wz:[1.42,-1.42],front:2.3,rear:-2.3,hl:.88,tl:1.05,mirror:.95,tum:.84,pillars:[-.3,.6],round:.86,
+   top:[[-2.3,1.0],[-2.2,1.5],[-2.1,1.72],[.55,1.76],[1.2,1.15],[2.2,1.02],[2.3,.7]],
    glass:[[-2.12,1.17],[-1.95,1.66],[.5,1.7],[1.12,1.17]]},
-  {L:5.8,W:2.0,wr:.36,wz:[1.95,-1.75],front:2.9,rear:-2.9,hl:.8,tl:.95,mirror:2.2,sign:[2.25,1.95],
-   body:[[-2.9,.42],[-2.9,2.55],[1.7,2.6],[2.35,1.5],[2.85,1.15],[2.92,.5],[2.9,.42]],
+  {L:5.8,W:2.0,wr:.36,wz:[1.95,-1.75],front:2.9,rear:-2.9,hl:.8,tl:.95,mirror:2.2,sign:[2.25,1.95],tum:.95,round:.92,pillars:[-1.3,.1,1.0],
+   top:[[-2.9,2.5],[-2.88,2.55],[1.7,2.6],[2.35,1.5],[2.85,1.15],[2.92,.5]],
    glass:[[-2.6,1.45],[-2.6,2.25],[1.55,2.3],[2.25,1.48]]},
   // 4: your car — a low sporty hatch
-  {L:4.25,W:1.82,wr:.34,wz:[1.36,-1.34],front:2.12,rear:-2.12,hl:.68,tl:.86,mirror:.88,
-   body:[[-2.12,.3],[-2.16,.84],[-1.98,1.04],[-1.35,1.12],[-.5,1.38],[.32,1.4],[.98,1.0],[1.95,.8],[2.14,.58],[2.12,.3]],
+  {L:4.25,W:1.82,wr:.34,wz:[1.36,-1.34],front:2.12,rear:-2.12,hl:.68,tl:.86,mirror:.88,tum:.76,pillars:[-.05],
+   top:[[-2.12,.8],[-2.0,1.04],[-1.35,1.12],[-.5,1.38],[.32,1.4],[.98,1.0],[1.95,.8],[2.12,.58]],
    glass:[[-1.3,1.12],[-.48,1.34],[.3,1.36],[.92,1.02]]},
+  // 5: Tavria (ZAZ-1102): short, tall-roofed hatch with a steep tail
+  {L:3.7,W:1.56,wr:.27,wz:[1.15,-1.12],front:1.85,rear:-1.85,hl:.62,tl:.78,mirror:.62,tum:.84,y0:.26,pillars:[-.32],doors:[.62,-.95],
+   top:[[-1.85,.84],[-1.7,.9],[-.85,1.38],[.35,1.37],[.95,.9],[1.65,.78],[1.85,.62]],
+   glass:[[-1.7,.9],[-.85,1.34],[.35,1.33],[.92,.92]]},
+  // 6: Lada "Zhiguli" sedan (VAZ-2107): boxy three-box
+  {L:4.15,W:1.62,wr:.3,wz:[1.3,-1.3],front:2.07,rear:-2.07,hl:.7,tl:.86,mirror:.7,tum:.82,pillars:[-.2],y0:.3,
+   top:[[-2.07,.92],[-1.95,.98],[-1.2,.99],[-.7,1.36],[.3,1.37],[.78,.98],[1.9,.92],[2.07,.74]],
+   glass:[[-1.2,.99],[-.7,1.33],[.3,1.34],[.78,.99]]},
+  // 7: Daewoo-Lanos-style compact sedan
+  {L:4.25,W:1.7,wr:.31,wz:[1.32,-1.34],front:2.12,rear:-2.12,hl:.72,tl:.88,mirror:.9,tum:.76,pillars:[-.1],
+   top:[[-2.12,.86],[-2.0,.98],[-1.3,1.0],[-.8,1.4],[.25,1.42],[.95,1.0],[1.85,.88],[2.12,.66]],
+   glass:[[-1.28,1.0],[-.78,1.36],[.23,1.38],[.9,1.02]]},
 ];
+function pickCarType(r){const v=r();return v<.17?0:v<.31?1:v<.42?2:v<.58?5:v<.72?6:v<.88?7:1}
 let PARKED_DIRTY=true;
 const PARKED_STATIC=[];
 function initCarMeshes(scene,N){
@@ -79,7 +142,7 @@ function writeCar(t,k,c){
   let q=0;for(const sx of [-1,1])for(const wz of t.wz){_ce.set(c.roll||0,0,0);_cq.setFromEuler(_ce);_cv.set(sx*t.wx,t.wr,wz);_cm2.compose(_cv,_cq,_cs);_cm2.premultiply(_cm);t.wheels.setMatrixAt(k*4+q,_cm2);q++}
 }
 function placeCars(list){
-  const cnt=[0,0,0,0,0];
+  const cnt=new Array(CAR_T.length).fill(0);
   const all=PARKED_CACHE.concat(list);
   for(const c of all){const t=CAR_T[c.type];if(cnt[c.type]>=t.cap)continue;writeCar(t,cnt[c.type],c);cnt[c.type]++}
   CAR_T.forEach((t,i)=>{t.mesh.count=cnt[i];t.wheels.count=cnt[i]*4;t.mesh.instanceMatrix.needsUpdate=true;t.wheels.instanceMatrix.needsUpdate=true;if(t.mesh.instanceColor)t.mesh.instanceColor.needsUpdate=true});
@@ -125,7 +188,7 @@ function randomSegNear(px,pz,rMin,rMax,forCar){
 function spawnCar(px,pz,near){
   const ri=randomSegNear(px,pz,near?60:150,near?260:330,true);if(ri<0)return null;
   const dir=Math.random()<.5?1:-1;const s=segInfo(ri,dir);
-  const type=Math.random()<.14?3:(Math.random()<.25?2:(Math.random()<.5?1:0));
+  const type=Math.random()<.14?3:pickCarType(Math.random);
   let col=CAR_COLS[Math.floor(Math.random()*CAR_COLS.length)];if(type===3)col=Math.random()<.6?0xf2c94c:0xf1f1ee;
   const c=D.wcls[D.wOf[ri]];
   return {ri,dir,s:Math.random()*s.L,v:0,vmax:(c===0?13:10)*(.8+Math.random()*.35),type,col,x:s.ax,y:0,z:s.az,yaw:Math.atan2(s.tx,s.tz),roll:0,pitch:0};

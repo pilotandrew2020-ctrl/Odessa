@@ -7,5 +7,6 @@
 - Key modules: o_game (loop, HUD, input, chunks), o_world/o_build (buildings, roads, rails), o_mats (shaders), o_land2 (stairs, Duke, landmarks), o_parks, o_port, o_station, o_opera, o_interiors (market/pharmacy/flat), o_trams, o_people (avatars), o_coop (multiplayer), o_drive (car).
 - Testing: headless Playwright screenshots (shoot.py / cam.py make step lists for a runner).
 
-## Next batch the user asked for
-Lanzheron + cable car + shops under it; gas station / marshrutka / houses / garages left of Williams (Chykalenka) St; proper car model; Tavria, car wash, enterable neighbouring houses and shops; seats in the railway station; bigger Greek & Istanbul parks; bigger 411th Battery.
+## Done (batch 2)
+Lanzheron cable car (o_lanz.js, ridable, shops under it); proper lofted car models + Tavria/Lada/Lanos (o_cars.js); gas station, marshrutka stop, garages, enterable car wash / Ryaba / garages (o_azs.js, interiors at INT_X+800..); station benches sit-able; parks get promenades/beds/gazebos (parkWalk), flowers follow terrain, groundQuad subdivides on slopes; bigger 411 battery + memorial plaza; Duke plaque + restaurant sign.
+Open: user photos to refine gas-station spot and details.

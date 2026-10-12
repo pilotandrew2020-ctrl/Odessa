@@ -6,9 +6,28 @@ function classicLamp(P,x,y,z,heads){const blk=sRGB('#1e2124');P.cyl(x,y,z,.16,.1
   const n=heads||2;for(let k=0;k<n;k++){const an=k/n*6.283;const hx=x+Math.cos(an)*(n>1?.45:0),hz=z+Math.sin(an)*(n>1?.45:0);if(n>1)P.box((x+hx)/2,y+3.75,(z+hz)/2,.5,.05,.05,-an,blk,1);
     P.cyl(hx,y+3.6,hz,.16,.2,.42,6,sRGB('#fff1c4'),3);P.cyl(hx,y+4.02,hz,.22,.04,.2,6,blk,1)}
   for(let k=0;k<n;k++){const an=k/n*6.283;EXTRA_LAMPS.push([x+Math.cos(an)*(n>1?.45:0),y+3.8,z+Math.sin(an)*(n>1?.45:0),2.2])}}
-function flowerBed(GR,P,x,z,w,d,ry,cols){const y=groundH(x,z);const c=Math.cos(ry),s=Math.sin(ry);const at=(u,v)=>[x+u*c-v*s,z+u*s+v*c];
-  addFlatRect(x,z,ry,w+1,d+1,3,y);groundQuad(GR,[at(-w/2,-d/2),at(w/2,-d/2),at(w/2,d/2),at(-w/2,d/2)],0,y+.04);const r=rng(((x*13)|0)^((z*7)|0));
-  for(let i=0;i<w*d*1.4;i++){const u=(r()-.5)*w,v=(r()-.5)*d;const wave=Math.sin(u*.5)*d*.3;const col=Math.abs(v-wave)<d*.12?cols[0]:(Math.abs(v+wave)<d*.1?cols[1]:cols[2]);if(!col)continue;const p=at(u,v);const gy=y+.04;P.box(p[0],gy+.1,p[1],.06,.2,.06,0,sRGB('#3d6b2e'),0);P.box(p[0],gy+.26,p[1],.26,.14,.26,r()*1.5,col,0)}}
+function flowerBed(GR,P,x,z,w,d,ry,cols){const c=Math.cos(ry),s=Math.sin(ry);const at=(u,v)=>[x+u*c-v*s,z+u*s+v*c];
+  groundQuad(GR,[at(-w/2,-d/2),at(w/2,-d/2),at(w/2,d/2),at(-w/2,d/2)],0);const r=rng(((x*13)|0)^((z*7)|0));TREE_CLEAR.push(x,z,Math.max(w,d)*.55);
+  for(let i=0;i<w*d*1.4;i++){const u=(r()-.5)*w,v=(r()-.5)*d;const wave=Math.sin(u*.5)*d*.3;const col=Math.abs(v-wave)<d*.12?cols[0]:(Math.abs(v+wave)<d*.1?cols[1]:cols[2]);if(!col)continue;const p=at(u,v);const gy=groundH(p[0],p[1]);
+    P.box(p[0],gy+.06,p[1],.06,.2,.06,0,sRGB('#3d6b2e'),0);P.box(p[0],gy+.2,p[1],.26,.14,.26,r()*1.5,col,0)}}
+function pipPoly(poly,x,z){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a[1]>z)!==(b[1]>z)&&x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0])c=!c}return c}
+// long park promenade along the polygon axis: paving that follows the slope, benches, lamps, flower beds
+function parkWalk(GR,P,poly,cx,cz,a,len,off,o){
+  const ca=Math.cos(a),sa=Math.sin(a),nx=-sa,nz=ca,st=5,hw=o.w/2;const r=rng(((cx*7)|0)^((off*131)|0));let k=0;
+  const inside=(x,z)=>pipPoly(poly,x,z)&&pipPoly(poly,x+nx*(hw+2),z+nz*(hw+2))&&pipPoly(poly,x-nx*(hw+2),z-nz*(hw+2));
+  for(let t=-len/2;t<len/2;t+=st,k++){
+    const p0=[cx+ca*t+nx*off,cz+sa*t+nz*off],p1=[cx+ca*(t+st)+nx*off,cz+sa*(t+st)+nz*off];
+    if(!inside(p0[0],p0[1])||!inside(p1[0],p1[1]))continue;
+    groundQuad(GR,[[p0[0]-nx*hw,p0[1]-nz*hw],[p0[0]+nx*hw,p0[1]+nz*hw],[p1[0]+nx*hw,p1[1]+nz*hw],[p1[0]-nx*hw,p1[1]-nz*hw]],5);
+    TREE_CLEAR.push(p0[0],p0[1],hw+1.6);
+    if(k%5===2)for(const sd of [-1,1]){const bx=p0[0]+nx*sd*(hw+.9),bz=p0[1]+nz*sd*(hw+.9);const by=groundH(bx,bz);
+      propBench2(P,bx,by,bz,Math.atan2(-sd*nx,-sd*nz),HOME_BENCHES);LOW_OBB.push(bx,bz,.95,.32,Math.cos(Math.atan2(-sd*nx,-sd*nz)),-Math.sin(Math.atan2(-sd*nx,-sd*nz)))}
+    if(k%4===0){const sd=(k/4)%2?1:-1;const lx=p0[0]+nx*sd*(hw+.6),lz=p0[1]+nz*sd*(hw+.6);classicLamp(P,lx,groundH(lx,lz),lz,2)}
+    if(o.beds&&k%9===4){const sd=r()<.5?-1:1;const bx=p0[0]+nx*sd*(hw+7),bz=p0[1]+nz*sd*(hw+7);
+      if(pipPoly(poly,bx,bz)&&pipPoly(poly,bx+ca*10,bz+sa*10)&&pipPoly(poly,bx-ca*10,bz-sa*10))flowerBed(GR,P,bx,bz,16+r()*6,5+r()*2,a,o.beds[(r()*o.beds.length)|0])}
+  }}
+function parkGazebo(P,x,z,roof){const gy=groundH(x,z);for(let k=0;k<8;k++){const an=k/8*6.283;const px=x+Math.cos(an)*2.6,pz=z+Math.sin(an)*2.6;P.box(px,groundH(px,pz)+1.3,pz,.18,2.6+gy-groundH(px,pz),.18,0,sRGB('#6b3a22'),5)}
+  P.cyl(x,gy-.1,z,3,3,.4,8,sRGB('#b9a88a'),7);P.cyl(x,gy+2.6,z,3.6,.3,1.6,8,sRGB(roof||'#2f6a4a'),1);STATIC_CIR.push(x,z,3)}
 // bronze head fountain: a big serene face on a column, a wide flat "cap" on top, water pouring down around it like a curtain
 function makeHeadFountain(x,y,z,ry){
   const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=ry;
@@ -84,6 +103,12 @@ function buildParks(grp,G,P,Sg,GR){
     grp.add(makeHeadFountain(f[0],fy,f[1],Math.atan2(c[0]-f[0],c[1]-f[1])));STATIC_CIR.push(f[0],f[1],3.4)}
    for(const p of [[660,-11290],[740,-11240],[640,-11300]])classicLamp(P,p[0],groundH(p[0],p[1]),p[1],2);
    playgroundArea(P,GR,{x:722,z:-11300,w:18,d:14,a:-.6});
+   {const G0=LMK.greek,gp=G0.poly,beds=[[sRGB('#d12c2c'),sRGB('#f4f0e8'),sRGB('#e8b42a')],[sRGB('#e26a2c'),sRGB('#c43a8a'),sRGB('#f4f0e8')],[sRGB('#8a3ac0'),sRGB('#f4f0e8'),sRGB('#e8b42a')]];
+    parkWalk(GR,P,gp,G0.x,G0.y,G0.a,G0.w*.92,0,{w:5,beds});parkWalk(GR,P,gp,G0.x,G0.y,G0.a,G0.w*.8,-34,{w:3.6,beds:null});parkWalk(GR,P,gp,G0.x,G0.y,G0.a,G0.w*.8,34,{w:3.6,beds:null});
+    // more fountain pools and gazebos along the promenade
+    for(const t of [-150,-70,95,170]){const q=[G0.x+Math.cos(G0.a)*t-Math.sin(G0.a)*22,G0.y+Math.sin(G0.a)*t+Math.cos(G0.a)*22];if(pipPoly(gp,q[0],q[1]))parkGazebo(P,q[0],q[1],'#2f4a8a')}
+    for(const t of [-190,10,130]){const q=[G0.x+Math.cos(G0.a)*t,G0.y+Math.sin(G0.a)*t];if(!pipPoly(gp,q[0],q[1]))continue;const fy=groundH(q[0],q[1]);P.cyl(q[0],fy,q[1],4.2,4.2,.5,24,stoneW,7);P.cyl(q[0],fy+.45,q[1],3.9,3.9,.05,24,sRGB('#3f8fa3'),8);P.cyl(q[0],fy,q[1],.5,.4,2.2,10,stoneW,7);STATIC_CIR.push(q[0],q[1],4.2)}
+    playgroundArea(P,GR,{x:G0.x+Math.cos(G0.a)*-120+Math.sin(G0.a)*30,z:G0.y+Math.sin(G0.a)*-120-Math.cos(G0.a)*30,w:18,d:14,a:G0.a})}
    PLACES.push({id:'greek',name:'Greek Park',sub:'stairs and fountain',x:c[0]+dx*(L/2+6),z:c[1]+dz*(L/2+6),yaw:Math.atan2(-dx,-dz)})}
   // ---------- Istanbul park: rock fountain, tulip beds, ODESA ISTANBUL letters, gazebos, statues ----------
   {const ip=LMK.istanbul;const c=[1010,-10935];const yy=groundH(c[0],c[1]);addFlat(c[0],c[1],22,10);
@@ -108,6 +133,10 @@ function buildParks(grp,G,P,Sg,GR){
    for(const [u0,u1,off] of [[-40,40,-22],[-30,30,20]]){const a=.9;const p0=[c[0]+Math.cos(a)*u0-Math.sin(a)*off,c[1]+Math.sin(a)*u0+Math.cos(a)*off],p1=[c[0]+Math.cos(a)*u1-Math.sin(a)*off,c[1]+Math.sin(a)*u1+Math.cos(a)*off];
      const L=Math.hypot(p1[0]-p0[0],p1[1]-p0[1]),m=[(p0[0]+p1[0])/2,(p0[1]+p1[1])/2];P.box(m[0],groundH(m[0],m[1])+.9,m[1],L,1.8,.7,-a,limestone,7)}
    for(const p of [[c[0]-8,c[1]-12],[c[0]+10,c[1]+10],[c[0]-20,c[1]+4],[c[0]+16,c[1]-6]])classicLamp(P,p[0],groundH(p[0],p[1]),p[1],2);
+   {const beds=[[sRGB('#e23a3a'),sRGB('#f4d03a'),sRGB('#e26a2c')],[sRGB('#8a3ac0'),sRGB('#f4f0e8'),sRGB('#e23a3a')],[sRGB('#f4d03a'),sRGB('#e23a3a'),sRGB('#f4f0e8')]];
+    parkWalk(GR,P,ip.poly,ip.x,ip.y,ip.a,ip.w*.92,0,{w:5,beds});parkWalk(GR,P,ip.poly,ip.x,ip.y,ip.a,ip.w*.8,-22,{w:3.4,beds:null});parkWalk(GR,P,ip.poly,ip.x,ip.y,ip.a,ip.w*.8,22,{w:3.4,beds:null});
+    for(const t of [-170,-100,80,150,190]){const q=[ip.x+Math.cos(ip.a)*t-Math.sin(ip.a)*14,ip.y+Math.sin(ip.a)*t+Math.cos(ip.a)*14];if(pipPoly(ip.poly,q[0],q[1]))parkGazebo(P,q[0],q[1],t%2?'#2f6a4a':'#8a2a2a')}
+    for(const t of [-190,-120,110,185]){const q=[ip.x+Math.cos(ip.a)*t,ip.y+Math.sin(ip.a)*t];if(!pipPoly(ip.poly,q[0],q[1]))continue;const fy=groundH(q[0],q[1]);P.cyl(q[0],fy,q[1],5,5,.5,24,sRGB('#efece4'),7);P.cyl(q[0],fy+.45,q[1],4.7,4.7,.05,24,sRGB('#5ea7b4'),8);P.cyl(q[0],fy,q[1],.6,.45,2.6,10,sRGB('#efece4'),7);STATIC_CIR.push(q[0],q[1],5)}}
    PLACES.push({id:'istanbul',name:'Istanbul Park',sub:'rock fountain and tulips',x:c[0]-14,z:c[1]+22,yaw:Math.atan2(14,-22)})}
   // ---------- City garden + Derybasivska: music fountain, lions, souvenir stalls, cafe terraces, New Year tree ----------
   {const g=[LMK.citygarden.x,LMK.citygarden.y];const gy=groundH(g[0],g[1]);addFlat(g[0],g[1],40,20);
@@ -148,7 +177,9 @@ const EX411=[ // [type,x,z,heading]
  ['gunB',-675,1511,2.45],['gunB',-670,1508,2.45],['gunB',-710,1499,2.45],['gun',-708,1502,2.45],['gun',-705,1505,2.45],['gun',-703,1507,2.45],['gun',-701,1510,2.45],['gunS',-699,1513,2.45],['gun',-697,1516,2.45],
  ['wagon',-739,1535,2.45],['naval',-746,1591,.9],['naval',-751,1594,.9],['naval',-755,1598,.9],['shelter',-760,1603,.9],['range',-766,1607,.9],['torpTube',-798,1634,.9],['bomb',-787,1626,.9],
  ['mine',-834,1663,0],['mine',-842,1669,0],['mine',-850,1675,0],['mine',-805,1640,0],['mine',-813,1647,0],['mine',-859,1683,0],['gun',-860,1630,.9],['gunAA',-845,1620,.9],['pit',-863,1612,.9],
- ['gunAA',-932,1679,.9],['gun',-944,1667,.9],['stele',-798,1614,.9]];
+ ['gunAA',-932,1679,.9],['gun',-944,1667,.9],['stele',-798,1614,.9],
+ ['gun',-690,1523,2.45],['gun',-685,1526,2.45],['gunB',-679,1530,2.45],['gunAA',-696,1535,2.45],['tank',-662,1493,2.2],['tankL',-657,1499,2.2],['truck',-668,1488,2.2],['missile',-722,1520,2.45],
+ ['naval',-772,1580,.9],['naval',-776,1585,.9],['mine',-818,1633,0],['mine',-826,1641,0],['mine',-868,1692,0],['gunAA',-880,1650,.9],['gun',-900,1660,.9],['gun',-910,1672,.9],['bomb',-795,1632,.9],['torpTube',-804,1640,.9]];
 function ex411(P,type,x,z,a){const c=Math.cos(a),s=Math.sin(a);const at=(u,v)=>[x+u*c-v*s,z+u*s+v*c];const ry=-a;const y=groundH(x,z);
   const ol=sRGB('#4c5737'),dk=sRGB('#2a2c28'),gr=sRGB('#6d7377'),bk=sRGB('#1b1c1d'),conc=sRGB('#bdb9b0'),wh=sRGB('#e6e6e0');
   const B=(u,v,h,w,hh,d,col,m)=>{const p=at(u,v);P.box(p[0],y+h,p[1],w,hh,d,ry,col,m===undefined?1:m)};
@@ -179,20 +210,20 @@ function build411(grp,G,P,Sg,GR){
   for(const [t,x,z,a] of EX411){const r=ex411(P,t,x,z,a);if(r)STATIC_CIR.push(x,z,r)}
   const M=(c,r,m)=>{const x=new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m||0});x.color.convertSRGBToLinear();return x};
   // submarine «Малютка» (black top, red below the waterline) on concrete stands
-  {const x=-689.5,z=1460.1,a=2.499;const y=groundH(x,z);const g=capsuleGeo(2.0,46,8,40);g.rotateZ(-Math.PI/2);const pos=g.attributes.position;const col=new Float32Array(pos.count*3);
+  {const x=-689.5,z=1460.1,a=2.499;const y=groundH(x,z);const g=capsuleGeo(2.6,64,8,48);g.rotateZ(-Math.PI/2);const pos=g.attributes.position;const col=new Float32Array(pos.count*3);
    const red=new THREE.Color(0x9c2a22).convertSRGBToLinear(),blk=new THREE.Color(0x1c1d20).convertSRGBToLinear();const wht=new THREE.Color(0xe8e8e4).convertSRGBToLinear();for(let i=0;i<pos.count;i++){const yy=pos.getY(i);const c=yy<-.05?red:(yy<.12?wht:blk);col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b}
-   g.setAttribute('color',new THREE.BufferAttribute(col,3));const hull=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.55,metalness:.2}));hull.position.set(x,y+3.0,z);hull.rotation.y=-a;hull.castShadow=true;grp.add(hull);
+   g.setAttribute('color',new THREE.BufferAttribute(col,3));const hull=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.55,metalness:.2}));hull.position.set(x,y+3.7,z);hull.rotation.y=-a;hull.castShadow=true;grp.add(hull);
    const ca=Math.cos(a),sa=Math.sin(a);const at=(u,v)=>[x+u*ca-v*sa,z+u*sa+v*ca];
-   {const p=at(3,0);P.box(p[0],y+6.1,p[1],7,3.2,1.9,-a,sRGB('#1c1d20'),1);P.box(p[0],y+7.9,p[1],1.2,1.2,.3,-a,sRGB('#1c1d20'),1)}
-   {const p=at(0,0);P.box(p[0],y+5.05,p[1],40,.3,1.6,-a,sRGB('#2a2b2e'),1)}
-   for(let k=-3;k<=3;k++){const p=at(k*6.5,0);P.box(p[0],y+.55,p[1],1.2,1.1,3.2,-a,sRGB('#bdb9b0'),9)}
-   addOBB(x,z,50,4.4,a);
-   const pl=plateMesh(['ПІДВОДНИЙ ЧОВЕН «МАЛЮТКА»'],{w:1024,h:120,size:64,color:'#fff',bg:'#1f3a5f',weight:'700'},3.6,.42);const pp=at(-8,2.6);pl.position.set(pp[0],y+1.2,pp[1]);pl.rotation.y=-a+Math.PI/2*0;pl.lookAt(pp[0]-sa*5,y+1.2,pp[1]+ca*5);grp.add(pl)}
+   {const p=at(4,0);P.box(p[0],y+7.6,p[1],9.5,4.2,2.5,-a,sRGB('#1c1d20'),1);P.box(p[0],y+10.1,p[1],1.6,1.6,.4,-a,sRGB('#1c1d20'),1)}
+   {const p=at(0,0);P.box(p[0],y+6.3,p[1],56,.3,2.0,-a,sRGB('#2a2b2e'),1)}
+   for(let k=-3;k<=3;k++){const p=at(k*9,0);P.box(p[0],y+.7,p[1],1.6,1.4,4.2,-a,sRGB('#bdb9b0'),9)}
+   addOBB(x,z,68,5.6,a);
+   const pl=plateMesh(['ПІДВОДНИЙ ЧОВЕН «МАЛЮТКА»'],{w:1024,h:120,size:64,color:'#fff',bg:'#1f3a5f',weight:'700'},3.6,.42);const pp=at(-8,3.6);pl.position.set(pp[0],y+1.2,pp[1]);pl.rotation.y=-a+Math.PI/2*0;pl.lookAt(pp[0]-sa*5,y+1.2,pp[1]+ca*5);grp.add(pl)}
   // armoured train wagon
   {const x=-632.2,z=1475.4,a=-.62;ex411(P,'wagon',x,z,a);addOBB(x,z,13,3.2,a);const ca=Math.cos(a),sa=Math.sin(a);const y=groundH(x,z);P.cyl(x+ca*2,y+3.1,z+sa*2,.9,.8,.6,10,sRGB('#4c5737'),1)}
   // raid minesweeper 729 on blocks
-  {const x=-890.2,z=1703.1,a=2.427;const y=groundH(x,z);const sh=buildShip({L:31,W:5.2,decks:1,funnel:0x4e5458,hull:0x6d7377,stripe:0x6d7377,hullH:3.4});sh.position.set(x,y+1.9,z);sh.rotation.y=-a;sh.userData.dyn=true;grp.add(sh);
-   const ca=Math.cos(a),sa=Math.sin(a);for(let k=-2;k<=2;k++)P.box(x+ca*k*6,y+.6,z+sa*k*6,1.2,1.2,3.6,-a,sRGB('#bdb9b0'),9);addOBB(x,z,32,5.6,a)}
+  {const x=-890.2,z=1703.1,a=2.427;const y=groundH(x,z);const sh=buildShip({L:46,W:7.6,decks:1,funnel:0x4e5458,hull:0x6d7377,stripe:0x6d7377,hullH:4.6});sh.position.set(x,y+2.6,z);sh.rotation.y=-a;sh.userData.dyn=true;grp.add(sh);
+   const ca=Math.cos(a),sa=Math.sin(a);for(let k=-3;k<=3;k++)P.box(x+ca*k*6.5,y+.8,z+sa*k*6.5,1.5,1.6,4.6,-a,sRGB('#bdb9b0'),9);addOBB(x,z,47,8,a)}
   // anti-torpedo net on posts
   {const x=-820.6,z=1652.6,a=2.464,L=100;const ca=Math.cos(a),sa=Math.sin(a);for(let u=-L/2;u<=L/2;u+=7){const px=x+ca*u,pz=z+sa*u;const y=groundH(px,pz);P.cyl(px,y,pz,.1,.08,3.4,6,sRGB('#3a3c3e'),1);STATIC_CIR.push(px,pz,.2)}
    const net=new THREE.Mesh(new THREE.PlaneGeometry(L,2.6),new THREE.MeshStandardMaterial({color:0x22262a,transparent:true,opacity:.45,side:THREE.DoubleSide,roughness:.9,depthWrite:false}));net.position.set(x,groundH(x,z)+1.9,z);net.rotation.y=-a;grp.add(net)}
@@ -204,5 +235,16 @@ function build411(grp,G,P,Sg,GR){
    const yel=M(0xe9b62a,.5),side=new THREE.MeshStandardMaterial({map:tex,roughness:.5});
    const body=new THREE.Mesh(new THREE.BoxGeometry(10.5,2.6,2.4),[yel,yel,M(0xd8d4c8,.5),yel,side,side]);body.position.set(x,y+2.2,z);body.rotation.y=-a+Math.PI/2*0;body.rotation.y=-a;grp.add(body);
    P.box(x,y+3.6,z,10.2,.3,2.2,-a,sRGB('#c8c4b8'),1);P.box(x,y+.4,z,9,.4,1.6,-a,sRGB('#2a2a2a'),1);for(const sv of [-1,1])P.box(x-sa*sv*.76,y+.12,z+ca*sv*.76,14,.12,.07,-a,sRGB('#6d6f72'),6);addOBB(x,z,10.6,2.6,a)}
+  // memorial plaza: granite plates, a tall obelisk with a star, flag poles, eternal flame
+  {const px=-714,pz=1531,y=groundH(px,pz);const R=15;groundQuad(GR,[[px-R,pz-R],[px+R,pz-R],[px+R,pz+R],[px-R,pz+R]],5);TREE_CLEAR.push(px,pz,R+4);
+   const gran2=sRGB('#4a4d52'),lim=sRGB('#cfc9ba');
+   P.box(px,y+.3,pz,9,.6,9,0,gran2,7);P.box(px,y+.8,pz,6,.4,6,0,gran2,7);P.box(px,y+9,pz,2.2,16,2.2,0,lim,7);P.box(px,y+17.4,pz,1.6,1.6,1.6,.78,lim,7);
+   for(let k=0;k<8;k++){const an=k/8*6.283;P.box(px+Math.cos(an)*1.6,y+19.2,pz+Math.sin(an)*1.6,.3,2.6,.1,-an,sRGB('#d8b23a'),1,0)}
+   STATIC_CIR.push(px,pz,5);
+   for(const sd of [-1,1]){const fx=px+sd*8,fz=pz-7,fy=groundH(fx,fz);P.cyl(fx,fy,fz,.14,.1,11,8,sRGB('#c9ccd0'),6);P.box(fx+.9,fy+10,fz,1.8,1.1,.04,0,sRGB(sd<0?'#2a63c4':'#f6d11c'),0);STATIC_CIR.push(fx,fz,.3)}
+   const fl=new THREE.Mesh(new THREE.ConeGeometry(.4,1.2,8),new THREE.MeshBasicMaterial({color:0xffa030,toneMapped:false}));fl.position.set(px+4.6,y+1.5,pz+4.6);fl.userData.dyn=true;grp.add(fl);ANIM.push(()=>{fl.scale.y=1+.2*Math.sin(UNI.uTime.value*9)});EXTRA_LAMPS.push([px+4.6,y+2,pz+4.6,1.5]);
+   const wall=plateMesh(['411-а БАТАРЕЯ','ПАМ’ЯТАЄМО ЗАХИСНИКІВ ОДЕСИ · 1941'],{w:1024,h:256,sizes:[100,52],color:'#f1ece0',bg:'#3a3d42',weight:'800'},9,2.25,.1);wall.position.set(px,y+2.6,pz-4.65);wall.rotation.y=0;grp.add(wall);
+   for(const k of [-1,1])classicLamp(P,px+k*12,groundH(px+k*12,pz+12),pz+12,2);
+   propBench2(P,px-11,groundH(px-11,pz),pz,Math.PI/2,HOME_BENCHES);propBench2(P,px+11,groundH(px+11,pz),pz,-Math.PI/2,HOME_BENCHES)}
   const sp=[-722,1548];PLACES.push({id:'b411',name:'411th Battery',sub:'Defence of Odesa memorial',x:sp[0],z:sp[1],yaw:Math.atan2(-689.5-sp[0],1460-sp[1])});
 }

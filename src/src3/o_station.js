@@ -93,7 +93,7 @@ function buildStation(grp,G,P,Sg,GR){
    groundQuad(GR,[F.P(C0+.4,0),F.P(C1-.4,0),F.P(C1-.4,33),F.P(C0+.4,33)],6,y0+.12);
    wall(C0+.4,C1-.4,.3,.35,0,CH-.5,hall);wall(C0+.4,C1-.4,32.65,32.7,0,CH-.5,hall);wall(C0+.4,C1-.4,0,33,CH-.6,CH-.45,new THREE.MeshStandardMaterial({color:0xf0e6cf,roughness:.8,side:THREE.DoubleSide}));
    for(const vv of [10,22])for(const uu of [C0+8,C1-8]){const p=F.P(uu,vv);miniChandelier(grp,{gold:new THREE.MeshStandardMaterial({color:0xd0a645,roughness:.32,metalness:.85}),crystal:new THREE.MeshStandardMaterial({color:0xfff4d8,emissive:0xffd890,emissiveIntensity:2.2})},p[0],y0+CH-4,p[1])}
-   for(const vv of [12,16,20])for(const uu of [C0+6,C0+12,C1-12,C1-6]){const p=F.P(uu,vv);propBench2(P,p[0],y0+.12,p[1],-a+Math.PI/2,null)}
+   for(const vv of [8,12,16,20,24])for(const uu of [C0+6,C0+12,C0+18,C1-18,C1-12,C1-6]){const p=F.P(uu,vv);propBench2(P,p[0],y0+.12,p[1],-a+Math.PI/2,HOME_BENCHES);LOW_OBB.push(p[0],p[1],.95,.32,F.sa,-F.ca)}
    {const b=(()=>{const cv=document.createElement('canvas');cv.width=1024;cv.height=512;const x=cv.getContext('2d');x.fillStyle='#0b0e13';x.fillRect(0,0,1024,512);x.fillStyle='#ffd14a';x.font='700 44px "Golos Text",Arial';x.fillText('ВІДПРАВЛЕННЯ',40,64);
      const rows=[['086','КИЇВ','22:15','5'],['146','ЛЬВІВ','23:40','3'],['6311','ПОДІЛЬСЬК','07:12','8'],['6403','ЧОРНОМОРСЬК','07:48','6'],['105','ХАРКІВ','17:25','2'],['6011','ВИЛКОВЕ','09:30','7']];
      x.font='600 36px "Golos Text",Arial';rows.forEach((r2,i)=>{x.fillStyle=i%2?'#e9edf2':'#ffffff';x.fillText(r2[0],40,130+i*60);x.fillText(r2[1],180,130+i*60);x.fillStyle='#7ee08a';x.fillText(r2[2],700,130+i*60);x.fillStyle='#ffd14a';x.fillText(r2[3],900,130+i*60)});

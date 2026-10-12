@@ -69,7 +69,7 @@ function buildHome(grp,G,P,Sg,GR){
   for(let i=0;i<n;i++){const j=(i+1)%n;const ax=isl[i*2],az=isl[i*2+1],bx=isl[j*2],bz=isl[j*2+1];const L=Math.hypot(bx-ax,bz-az);if(L<6)continue;const tx=(bx-ax)/L,tz=(bz-az)/L;let nx=tz,nz=-tx;
     if(nx*((ax+bx)/2-ix)+nz*((az+bz)/2-iz)<0){nx=-nx;nz=-nz}
     for(let u=3;u<L-3;u+=2.7){if(r()<.28)continue;const x=ax+tx*u+nx*2.6,z=az+tz*u+nz*2.6;let skip=false;for(const [su,sv] of [[0,-hd],[0,hd],[-hw,0]]){const s=at(su,sv);if(Math.hypot(s[0]-x,s[1]-z)<3.5)skip=true}if(skip)continue;
-      PARKED_STATIC.push({x,y:y0+.1,z,yaw:Math.atan2(nx,nz)+(r()<.5?0:Math.PI),type:r()<.15?2:(r()<.5?1:0),col:CAR_COLS[Math.floor(r()*CAR_COLS.length)],pitch:0,roll:0});LOW_OBB.push(x,z,1.0,2.3,tx,tz)}}
+      PARKED_STATIC.push({x,y:y0+.1,z,yaw:Math.atan2(nx,nz)+(r()<.5?0:Math.PI),type:pickCarType(r),col:CAR_COLS[Math.floor(r()*CAR_COLS.length)],pitch:0,roll:0});LOW_OBB.push(x,z,1.0,2.3,tx,tz)}}
   // entrances: platform, steps, ramp + railings, canopy, light, intercom, number plate
   HOME_ENT=ents;const grey=sRGB('#9a9792'),rail=sRGB('#8a8e92');
   ents.forEach((e,idx)=>{const ry2=Math.atan2(e.nx,e.nz);const W2=(dt,dn)=>[e.x+e.tx*dt+e.nx*dn,e.z+e.tz*dt+e.nz*dn];
@@ -115,7 +115,7 @@ function buildSupermarket(grp,G,P,Sg,GR,y0){
   // dark glass rounded corner (restaurant) with awnings
   const n=ring.length>>1;for(let i=0;i<n;i++){const x=ring[i*2],z=ring[i*2+1];if(z<71)continue;}
   for(const [x,z,ry] of [[60,72.8,-1.1],[64.5,76.6,-.3],[70.2,74.2,.6]]){P.box(x,y0+3.2,z,2.6,.08,1.1,ry,sRGB('#5a2a18'),5,-.35);P.box(x,y0+3.45,z,2.6,.3,.06,ry,sRGB('#5a2a18'),5)}
-  addSign(Sg,64.6,y0+5.0,78.3,0,0,.22,.97,6,.8,39);
+  {const pm=plateMesh(['РЕСТОРАН'],{w:1024,h:170,size:120,color:'#f2c14e',bg:'#2a1a12',weight:'800'},6,1,.35);pm.position.set(64.6+.22*.2,y0+5.2,78.3+.97*.2);pm.rotation.y=Math.atan2(.22,.97);grp.add(pm)}
   // entrance on the street (east) side
   const dx=72.15,dz=63.5,nx=.97,nz=.24;const ry=Math.atan2(nx,nz);
   P.box(dx+nx*.9,y0+3.3,dz+nz*.9,4.6,.15,2,ry,sRGB('#2a2a2a'),1);

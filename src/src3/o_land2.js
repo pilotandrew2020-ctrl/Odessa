@@ -35,7 +35,15 @@ function geo2xz(lat,lon){return [(lon-HDR.LON0)*HDR.KX,-(lat-HDR.LAT0)*HDR.KZ]}
 let _glow=null;
 function glowTex(){if(_glow)return _glow;const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');const g=x.createRadialGradient(32,32,0,32,32,32);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.25,'rgba(255,240,200,.6)');g.addColorStop(1,'rgba(255,220,150,0)');x.fillStyle=g;x.fillRect(0,0,64,64);_glow=new THREE.CanvasTexture(c);return _glow}
 // ground-material quad (paving etc.)
-function groundQuad(G,ps,kind,y,rot){quadN(G,ps.map(p=>[p[0],y!==undefined?y:groundH(p[0],p[1])+.06,p[1]]),[0,1,0],()=>({aK:[kind,rot||0],aR:[0,0,0,0],aU:0}))}
+function groundQuad(G,ps,kind,y,rot){
+  const at=()=>({aK:[kind,rot||0],aR:[0,0,0,0],aU:0});
+  if(y!==undefined||ps.length!==4){quadN(G,ps.map(p=>[p[0],y!==undefined?y:groundH(p[0],p[1])+.06,p[1]]),[0,1,0],at);return}
+  // follow the terrain: split long quads into ~3.5 m cells with a per-vertex lift that grows on slopes (no z-fight shimmer)
+  const L1=Math.hypot(ps[1][0]-ps[0][0],ps[1][1]-ps[0][1]),L2=Math.hypot(ps[3][0]-ps[0][0],ps[3][1]-ps[0][1]);
+  const nu=Math.max(1,Math.min(40,Math.ceil(L1/3.5))),nv=Math.max(1,Math.min(40,Math.ceil(L2/3.5)));
+  const P=(a,b)=>{const t=a/nu,u=b/nv;const x0=ps[0][0]+(ps[1][0]-ps[0][0])*t,z0=ps[0][1]+(ps[1][1]-ps[0][1])*t,x1=ps[3][0]+(ps[2][0]-ps[3][0])*t,z1=ps[3][1]+(ps[2][1]-ps[3][1])*t;
+    const x=x0+(x1-x0)*u,z=z0+(z1-z0)*u;const h=groundH(x,z),e=2.2;const sl=Math.hypot(groundH(x+e,z)-groundH(x-e,z),groundH(x,z+e)-groundH(x,z-e))/(2*e);return [x,h+.06+Math.min(.16,sl*.3),z]};
+  for(let a=0;a<nu;a++)for(let b=0;b<nv;b++)quadN(G,[P(a,b),P(a+1,b),P(a+1,b+1),P(a,b+1)],[0,1,0],at)}
 
 let CASHIER=null;
 const EXTRA_TREES=[];const HOME_BENCHES=[];let HOME_ENT=[];
@@ -126,7 +134,7 @@ function buildStairs(grp,P,GR){
     cabs[i].position.set(c[0],yy,c[1]);cabs[i].rotation.set(0,ry,0);cabs[i].rotateX(Math.atan2(yT-yB,L))}});
   // Duke statue
   const dp=[LMK.duke.x,LMK.duke.y],gy=groundH(dp[0],dp[1]);
-  for(let k=0;k<3;k++)P.box(dp[0],gy+.2+k*.4,dp[1],6.4-k*1.2,.4,6.4-k*1.2,ry,sRGB('#8f897e'),7);P.box(dp[0],gy+3.1,dp[1],2.4,3.6,2.4,ry,sRGB('#857f74'),7);P.box(dp[0],gy+4.95,dp[1],2.9,.3,2.9,ry,sRGB('#8f897e'),7);P.box(dp[0],gy+3.2,dp[1]+1.22,1.4,1.6,.04,0,sRGB('#b58d3c'),1);
+  for(let k=0;k<3;k++)P.box(dp[0],gy+.2+k*.4,dp[1],6.4-k*1.2,.4,6.4-k*1.2,ry,sRGB('#8f897e'),7);P.box(dp[0],gy+3.1,dp[1],2.4,3.6,2.4,ry,sRGB('#857f74'),7);P.box(dp[0],gy+4.95,dp[1],2.9,.3,2.9,ry,sRGB('#8f897e'),7);{const fx=Math.sin(ry),fz=Math.cos(ry);const pm=plateMesh(['ДЮК ДЕ','РІШЕЛЬЄ','1828'],{w:512,h:512,sizes:[84,84,70],color:'#3a2a10',bg:'#c9a24a',weight:'800'},1.9,1.9,.05);pm.position.set(dp[0]+fx*1.23,gy+3.1,dp[1]+fz*1.23);pm.rotation.y=ry;grp.add(pm)}
   for(let k=0;k<12;k++){const an=k/12*6.283;P.box(dp[0]+Math.cos(an)*4.2,gy+.45,dp[1]+Math.sin(an)*4.2,.25,.9,.25,0,sRGB('#1e1e1e'),1)}
   grp.add(makeDuke(dp[0],gy+5.1,dp[1],ry));
   STATIC_CIR.push(dp[0],dp[1],3.4);addFlat(dp[0],dp[1],36,20);TREE_CLEAR.push(dp[0],dp[1],13);
@@ -162,7 +170,7 @@ function buildAllLandmarks(scene){
   const grp=new THREE.Group();scene.add(grp);LANDMARK_GRP=grp;
   const G=new GB({position:3,normal:3,aUV:2,aP:4,aQ:1,aT:3}),P=new PB(),Sg=new GB({position:3,normal:3,uv:2});GRX=new GB({position:3,normal:3,aK:2,aR:4,aU:1});
   const steps=[['home',()=>buildHome(grp,G,P,Sg,GRX)],['stairs',()=>buildStairs(grp,P,GRX)],['station',()=>buildStation(grp,G,P,Sg,GRX)],['lighthouse',()=>buildLighthouse(grp,P)],
-    ['opera',()=>buildOpera(grp,G,P,Sg,GRX)],['port',()=>buildPort(grp,G,P,Sg,GRX)],['parks',()=>buildParks(grp,G,P,Sg,GRX)],['b411',()=>build411(grp,G,P,Sg,GRX)]];
+    ['opera',()=>buildOpera(grp,G,P,Sg,GRX)],['port',()=>buildPort(grp,G,P,Sg,GRX)],['parks',()=>buildParks(grp,G,P,Sg,GRX)],['b411',()=>build411(grp,G,P,Sg,GRX)],['lanz',()=>buildLanzheron(grp,G,P,Sg,GRX)],['azs',()=>buildNeighbourhood(grp,G,P,Sg,GRX)]];
   for(const [nm,f] of steps){try{f()}catch(e){console.error('landmark '+nm+' failed',e)}}
   {const z=LMK.lanzheron;PLACES.push({id:'lanzheron',name:'Lanzheron',sub:'beach',x:z.x-12,z:z.y,yaw:Math.PI/2});beachUmbrellas(P,z.x,z.y,60);
    const a=LMK.arcadia;PLACES.push({id:'arcadia',name:'Arkadia',sub:'beach',x:a.x-30,z:a.y,yaw:Math.PI/2});beachUmbrellas(P,a.x,a.y,90);

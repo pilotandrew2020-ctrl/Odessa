@@ -2,7 +2,7 @@ import sys,os
 import os
 B=os.path.dirname(os.path.abspath(__file__))+'/'
 shell=open(B+'src3/shell2.html').read()
-mods=['o_core.js','o_tex.js','o_mats.js','o_build.js','o_world.js','o_trees.js','o_land2.js','o_home3.js','o_opera.js','o_station.js','o_port.js','o_parks.js','o_people.js','o_cars.js','o_drive.js','o_trams.js','o_interiors.js','o_audio.js','o_game.js','o_coop.js']
+mods=['o_core.js','o_tex.js','o_mats.js','o_build.js','o_world.js','o_trees.js','o_land2.js','o_home3.js','o_opera.js','o_station.js','o_port.js','o_parks.js','o_lanz.js','o_people.js','o_cars.js','o_drive.js','o_trams.js','o_interiors.js','o_azs.js','o_audio.js','o_game.js','o_coop.js']
 js='\n'.join(open(B+'src3/'+f).read() for f in mods if os.path.exists(B+'src3/'+f))
 open(B+'src3/_all.js','w').write(js)
 hdr=open(B+'data/hdr3.json').read(); b64=open(B+'data/blob3.b64').read()
