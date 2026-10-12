@@ -200,6 +200,8 @@ function* buildChunkGen(id){
     else if(f.k===3||f.k===4){let fx=f.x,fz=f.z;
       // tram/bus stop mapped on the rails: move the shelter beside the track
       if(D.rSegStart){const q=tramRailNear(fx,fz,4.5,-1);if(q){let nx=-q[3],nz=q[2];if((fx-q[0])*nx+(fz-q[1])*nz<0){nx=-nx;nz=-nz}const o2=tramRailNear(q[0]+nx*3.4,q[1]+nz*3.4,1.6,q[5]);const push=o2?5.6:3.4;fx=q[0]+nx*push;fz=q[1]+nz*push}}
+      let rail=false;if(D.rSegStart){rail=!!tramRailNear(f.x,f.z,4.5,-1)}
+      if(f.k===3&&!rail){const q=nearRoadPt(id,fx,fz);if(q&&q.d<14&&q.c<=2){const want=q.side||1;const dd=HW[q.c]+SW[q.c]*.55+1.1;fx=q.px+q.nx*want*dd;fz=q.pz+q.nz*want*dd;addBusStop(q.px,q.pz,q.nx*want,q.nz*want)}}
       if(solid(fx,fz,1.5))continue;const ry=roadYaw(id,fx,fz);busShelter(P,fx,groundH(fx,fz),fz,ry,f.k===4);obb.push(fx,fz,1.9,.75,Math.cos(ry),-Math.sin(ry))}
     else if(f.k===5){if(solid(f.x,f.z,2.6)||nearRoad(id,f.x,f.z,1))continue;fountainProp(P,f.x,y,f.z);cirs.push(f.x,f.z,2.6)}}
   // playgrounds, sports courts
@@ -221,6 +223,8 @@ function* buildChunkGen(id){
   chunks.set(id,c);PARKED_DIRTY=true;TREES.add(id,treePts);
 }
 const YELLOW_SD=(()=>{for(let s=0;s<256;s++){const h=(s/255*13.7+.11)%1;if(h>.49&&h<.55)return s}return 0})();
+function nearRoadPt(id,x,z){const P=D.nodes,wn=D.wn;let best=1e9,r=null;for(let s=D.segStart[id];s<D.segStart[id+1];s++){const i=D.seg[s];const c=D.wcls[D.wOf[i]];if(c>2||D.wfl[D.wOf[i]]===1)continue;const a=wn[i]*2,b=wn[i+1]*2;const ax=P[a],az=P[a+1],dx=P[b]-ax,dz=P[b+1]-az;const L2=dx*dx+dz*dz;if(L2<.01)continue;
+  let t=((x-ax)*dx+(z-az)*dz)/L2;t=t<0?0:t>1?1:t;const px=ax+dx*t,pz=az+dz*t;const d=Math.hypot(px-x,pz-z);if(d<best){best=d;const L=Math.sqrt(L2);const nx=-dz/L,nz=dx/L;r={px,pz,nx,nz,d,c,side:((x-px)*nx+(z-pz)*nz)>=0?1:-1}}}return r}
 function roadYaw(id,x,z){const P=D.nodes,wn=D.wn;let best=1e9,ang=0;for(let s=D.segStart[id];s<D.segStart[id+1];s++){const i=D.seg[s];const a=wn[i]*2,b=wn[i+1]*2;const ax=P[a],az=P[a+1],dx=P[b]-ax,dz=P[b+1]-az;const L2=dx*dx+dz*dz;if(L2<.01)continue;
   let t=((x-ax)*dx+(z-az)*dz)/L2;t=t<0?0:t>1?1:t;const d=Math.hypot(ax+dx*t-x,az+dz*t-z);if(d<best){best=d;const sx=(dx*(z-az)-dz*(x-ax))>0?1:-1;ang=Math.atan2(dx,dz)+Math.PI/2*sx}}return ang}
 function buildPlayground(P,x,y,z,ry,r){
@@ -631,7 +635,7 @@ function loop(t){
   if(started&&$('mapUI').hidden){
     refreshCarObb();if(DRIVE.on)stepDrive(dt);else if(!RIDE.on)stepPlayer(dt);
     if(PORTAL.cur){stepIntPeds(dt);placePeople(PORTAL.peds)}
-    else{updateCars(dt,player,Qp().cars);updatePeds(dt,player,Qp().peds);if(typeof updateTrams!=='undefined')updateTrams(dt);if(PARKED_DIRTY||(lightTick%60===0)){refreshParked(chunks,player.x,player.z);PARKED_DIRTY=false}dodgeCar(PEDS);dodgeCar(TALKERS);placeCars(DRIVE.car?CARS.concat([DRIVE.car]):CARS);placePeople(crowdList());
+    else{updateCars(dt,player,Qp().cars);updatePeds(dt,player,Qp().peds);if(typeof updateTrams!=='undefined')updateTrams(dt);if(PARKED_DIRTY||(lightTick%60===0)){refreshParked(chunks,player.x,player.z);PARKED_DIRTY=false}dodgeCar(PEDS);dodgeCar(TALKERS);placeCars(DRIVE.car?CARS.concat([DRIVE.car]):CARS);updateRoutePlates(scene,player);placePeople(crowdList());
       TREES.update(player.x,player.z,Qp().trees)}
     updateIndoor(dt);updateHUD(dt);COOP.update(dt);
     if((typeof SPK!=='undefined')&&SPK)SPK.update(dt);

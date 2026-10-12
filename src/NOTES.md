@@ -10,3 +10,9 @@
 ## Done (batch 2)
 Lanzheron cable car (o_lanz.js, ridable, shops under it); proper lofted car models + Tavria/Lada/Lanos (o_cars.js); gas station, marshrutka stop, garages, enterable car wash / Ryaba / garages (o_azs.js, interiors at INT_X+800..); station benches sit-able; parks get promenades/beds/gazebos (parkWalk), flowers follow terrain, groundQuad subdivides on slopes; bigger 411 battery + memorial plaza; Duke plaque + restaurant sign.
 Open: user photos to refine gas-station spot and details.
+
+## Batch 3 (transport)
+- Hide & Seek: o_hide.js (HS), co-op via Claude named rooms `od<code>` (o_coop.js) — needs real-device check.
+- Buses: CAR_DEFS[8] city bus + marshrutka type 3 spawn only on class<=1 roads with route number from BUS_ROUTES/MARSH_ROUTES (hash of way id; geometry approximate, numbers from user's maps). Route plates = pooled meshes (updateRoutePlates).
+- Bus stops (OSM k===3) are moved to the curb (nearRoadPt) and registered in BUS_STOPS; buses slow down and dwell 5–10 s there.
+- TODO: trolleybuses, landmarks from user, Deribasivska, Potemkin stairs.

@@ -189,13 +189,46 @@ function randomSegNear(px,pz,rMin,rMax,forCar){
     return ri}
   return -1;
 }
+// ---- bus routes (numbers from the city route maps; geometry is approximate) ----
+const BUS_ROUTES=['12','117','121','130','131','141','145','146','151','175','185','220','221','223','242','100','110','120','137','155','16','165','191','232','203','28'];
+const MARSH_ROUTES=['175','185','220','221','223','242','137','151','117','141','146','155','165','191','232'];
+function routeFor(way,type){const L=type===8?BUS_ROUTES:MARSH_ROUTES;return L[(way*2654435761>>>0)%L.length]}
+const BUS_STOPS=[];
+function addBusStop(x,z,nx,nz){for(const b of BUS_STOPS)if(Math.abs(b.x-x)<2&&Math.abs(b.z-z)<2)return;BUS_STOPS.push({x,z,nx,nz,id:BUS_STOPS.length})}
+const ROUTE_TEX={};
+function routeMat(num){let m=ROUTE_TEX[num];if(m)return m;
+  const cv=document.createElement('canvas');cv.width=256;cv.height=96;const g=cv.getContext('2d');
+  g.fillStyle='#120c04';g.fillRect(0,0,256,96);g.strokeStyle='#3a2a10';g.lineWidth=4;g.strokeRect(2,2,252,92);
+  g.fillStyle='#ffb02e';g.font='bold 72px monospace';g.textAlign='center';g.textBaseline='middle';g.fillText(num,128,52);
+  const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;t.anisotropy=4;
+  m=ROUTE_TEX[num]=new THREE.MeshBasicMaterial({map:t,toneMapped:false});return m}
+let ROUTE_POOL=null;
+function updateRoutePlates(scene,player){
+  if(!ROUTE_POOL){ROUTE_POOL=[];const gm=new THREE.PlaneGeometry(1,1);
+    for(let i=0;i<8;i++){const g=new THREE.Group();g.visible=false;const ms=[];for(let k=0;k<3;k++){const m=new THREE.Mesh(gm,routeMat('0'));g.add(m);ms.push(m)}
+      ms[1].rotation.y=Math.PI/2;ms[2].rotation.y=-Math.PI/2;g.userData.ms=ms;scene.add(g);ROUTE_POOL.push(g)}}
+  const cand=[];for(const c of CARS){if(!c.route)continue;const d=Math.hypot(c.x-player.x,c.z-player.z);if(d<50)cand.push([d,c])}
+  cand.sort((a,b)=>a[0]-b[0]);
+  for(let i=0;i<ROUTE_POOL.length;i++){const g=ROUTE_POOL[i];const e=cand[i];if(!e){g.visible=false;continue}
+    const c=e[1],ms=g.userData.ms,bus=c.type===8;g.visible=true;g.position.set(c.x,c.y,c.z);g.rotation.set(c.pitch||0,c.yaw,0,'YXZ');
+    for(const m of ms)m.material=routeMat(c.route);
+    if(bus){ms[0].position.set(0,2.86,5.33);ms[0].scale.set(1.1,.34,1);
+      for(let k=1;k<3;k++){const sx=k===1?1:-1;ms[k].position.set(sx*1.262,2.45,4.0);ms[k].scale.set(.7,.25,1)}}
+    else{ms[0].position.set(0,2.0,2.55);ms[0].rotation.x=-.45;ms[0].scale.set(.55,.2,1);
+      for(let k=1;k<3;k++){const sx=k===1?1:-1;ms[k].position.set(sx*1.012,2.0,1.9);ms[k].scale.set(.4,.15,1)}}
+    if(bus)ms[0].rotation.x=0;
+  }
+}
 function spawnCar(px,pz,near){
   const ri=randomSegNear(px,pz,near?60:150,near?260:330,true);if(ri<0)return null;
   const dir=Math.random()<.5?1:-1;const s=segInfo(ri,dir);
-  const rr=Math.random();const type=rr<.04?8:rr<.16?3:pickCarType(Math.random);
+  const c0=D.wcls[D.wOf[ri]];
+  const rr=Math.random();let type=rr<.07?8:rr<.17?3:pickCarType(Math.random);
+  if((type===8||type===3)&&c0>1){type=pickCarType(Math.random)}
+  const route=(type===8||type===3)?routeFor(D.wOf[ri],type):null;
   let col=CAR_COLS[Math.floor(Math.random()*CAR_COLS.length)];if(type===3)col=Math.random()<.6?0xf2c94c:0xf1f1ee;if(type===8)col=[0x2a5aa0,0xe0a526,0xc22a2a,0xf1f1ee,0x2e7d4f][Math.floor(Math.random()*5)];
   const c=D.wcls[D.wOf[ri]];
-  return {ri,dir,s:Math.random()*s.L,v:0,vmax:(c===0?13:10)*(.8+Math.random()*.35),type,col,x:s.ax,y:0,z:s.az,yaw:Math.atan2(s.tx,s.tz),roll:0,pitch:0};
+  return {ri,dir,s:Math.random()*s.L,v:0,vmax:(c===0?13:10)*(.8+Math.random()*.35),type,col,route,dw:0,lastStop:-1,x:s.ax,y:0,z:s.az,yaw:Math.atan2(s.tx,s.tz),roll:0,pitch:0};
 }
 function updateCars(dt,player,maxN){
   while(CARS.length<maxN){const c=spawnCar(player.x,player.z,CARS.length<maxN/2&&!updateCars.init);if(!c)break;CARS.push(c)}
@@ -206,6 +239,13 @@ function updateCars(dt,player,maxN){
     const fx=Math.sin(c.yaw),fz=Math.cos(c.yaw);
     const chk=(ox,oz,r)=>{const rx=ox-c.x,rz=oz-c.z;const ahead=rx*fx+rz*fz,lat=Math.abs(rx*fz-rz*fx);if(ahead>0&&ahead<r&&lat<2.0)tgt=Math.min(tgt,Math.max(0,(ahead-5.5)*1.2))};
     chk(player.x,player.z,15);for(const o of CARS){if(o!==c)chk(o.x,o.z,13)}
+    if(c.route){
+      if(c.dw>0){c.dw-=dt;tgt=0}
+      else{const nbx=-s.tz,nbz=s.tx;
+        for(const b of BUS_STOPS){const rx=b.x-c.x,rz=b.z-c.z;const ahead=rx*fx+rz*fz;if(ahead<-1||ahead>16||b.id===c.lastStop)continue;
+          if(Math.abs(rx*fz-rz*fx)>7||(b.nx*nbx+b.nz*nbz)<.3)continue;
+          tgt=Math.min(tgt,Math.max(0,(ahead-2.2)*.8));if(ahead<3.6&&c.v<.6){c.dw=5+Math.random()*5;c.lastStop=b.id}break}}
+    }
     c.v+=(tgt-c.v)*Math.min(1,dt*(tgt<c.v?3.5:1.2));c.s+=c.v*dt;
     let guard=0;while(c.s>s.L&&guard++<8){c.s-=s.L;[c.ri,c.dir]=nextSeg(c.ri,c.dir,true);s=segInfo(c.ri,c.dir)}
     const cl=D.wcls[D.wOf[c.ri]];const off=laneOff(cl);const nx=-s.tz,nz=s.tx;
