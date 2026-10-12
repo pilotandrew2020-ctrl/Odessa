@@ -122,6 +122,10 @@ const CAR_DEFS=[
   {L:4.25,W:1.7,wr:.31,wz:[1.32,-1.34],front:2.12,rear:-2.12,hl:.72,tl:.88,mirror:.9,tum:.76,pillars:[-.1],
    top:[[-2.12,.86],[-2.0,.98],[-1.3,1.0],[-.8,1.4],[.25,1.42],[.95,1.0],[1.85,.88],[2.12,.66]],
    glass:[[-1.28,1.0],[-.78,1.36],[.23,1.38],[.9,1.02]]},
+  // 8: city bus
+  {L:10.6,W:2.5,wr:.5,wz:[3.4,-3.7],front:5.3,rear:-5.3,hl:.85,tl:.9,mirror:4.7,tum:.97,round:.94,pillars:[-3.6,-1.2,1.2,3.6],y0:.42,
+   top:[[-5.3,3.0],[-5.28,3.06],[4.9,3.06],[5.25,2.4],[5.3,.9]],
+   glass:[[-5.0,1.35],[-5.0,2.78],[4.9,2.78],[5.2,1.5]]},
 ];
 function pickCarType(r){const v=r();return v<.17?0:v<.31?1:v<.42?2:v<.58?5:v<.72?6:v<.88?7:1}
 let PARKED_DIRTY=true;
@@ -188,8 +192,8 @@ function randomSegNear(px,pz,rMin,rMax,forCar){
 function spawnCar(px,pz,near){
   const ri=randomSegNear(px,pz,near?60:150,near?260:330,true);if(ri<0)return null;
   const dir=Math.random()<.5?1:-1;const s=segInfo(ri,dir);
-  const type=Math.random()<.14?3:pickCarType(Math.random);
-  let col=CAR_COLS[Math.floor(Math.random()*CAR_COLS.length)];if(type===3)col=Math.random()<.6?0xf2c94c:0xf1f1ee;
+  const rr=Math.random();const type=rr<.04?8:rr<.16?3:pickCarType(Math.random);
+  let col=CAR_COLS[Math.floor(Math.random()*CAR_COLS.length)];if(type===3)col=Math.random()<.6?0xf2c94c:0xf1f1ee;if(type===8)col=[0x2a5aa0,0xe0a526,0xc22a2a,0xf1f1ee,0x2e7d4f][Math.floor(Math.random()*5)];
   const c=D.wcls[D.wOf[ri]];
   return {ri,dir,s:Math.random()*s.L,v:0,vmax:(c===0?13:10)*(.8+Math.random()*.35),type,col,x:s.ax,y:0,z:s.az,yaw:Math.atan2(s.tx,s.tz),roll:0,pitch:0};
 }

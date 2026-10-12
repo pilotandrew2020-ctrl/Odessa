@@ -48,7 +48,7 @@ function patchMat(mat,o){
     vs=vs.replace('#include <common>','#include <common>\n'+PATCH_VS_DECL+'\n'+(o.vDecl||''));
     if(o.vBegin)vs=vs.replace('#include <begin_vertex>','#include <begin_vertex>\n'+o.vBegin);
     vs=vs.replace('#include <project_vertex>','#include <project_vertex>\n'+PATCH_VS_MAIN+'\n'+(o.vMain||''));
-    fs=fs.replace('#include <common>','#include <common>\n#define tx2(s,uv) texture2D(s,uv,1.15)\n'+GLSL_LIB+'\nuniform sampler2D tAsph,tTiles,tCob,tGrass,tDirt,tSand,tSnow,tBrick,tPlaster,tConc,tRoof,tGran,tMarble,tWood,uSD,uLU;uniform vec4 uSDT;\n'+(o.fDecl||''));
+    fs=fs.replace('#include <common>','#include <common>\n#define tx2(s,uv) texture2D(s,uv,1.3)\n'+GLSL_LIB+'\nuniform sampler2D tAsph,tTiles,tCob,tGrass,tDirt,tSand,tSnow,tBrick,tPlaster,tConc,tRoof,tGran,tMarble,tWood,uSD,uLU;uniform vec4 uSDT;\n'+(o.fDecl||''));
     fs=fs.replace('#include <color_fragment>','#include <color_fragment>\nvec3 sAlb=diffuseColor.rgb;float sRough=roughness;float sMetal=metalness;vec3 sEmis=vec3(0.);float sH=0.;float sBump=0.;float sAO=1.;\n'+(o.fSurf||'')+'\ndiffuseColor.rgb=sAlb;');
     fs=fs.replace(/texture2D\((t[A-Z][A-Za-z]*),/g,'tx2($1,');
     fs=fs.replace('#include <roughnessmap_fragment>','float roughnessFactor=sRough;');
@@ -303,6 +303,28 @@ const BLD_SURF=`
      else {inWin=5.;}
    } else {sAlb=toLin(vec3(.78));}
  }
+ // wall-mounted details: split AC units (white, red mark), satellite dishes, yellow gas pipe
+ if(v>.3&&v<H&&!nowin&&!logg&&st>1.5&&st<6.5||v>.3&&v<H&&home&&!logg){
+   float xm=(fu-.5)*cs,ym=fv*FH;bool gnd=(GF>0.&&v<GF);
+   if(!gnd&&inWin<.5&&frame<.5&&row>=0.){
+     float hA=h12(vec2(ci,row)+sd*17.);float side=hA<.11?-1.:1.;
+     if(hA<.34){float axc=side*(WW*.5+.44),ayc=SILL+WH*.6;
+       if(abs(axc)+.38<cs*.5){float ax=xm-axc,ay=ym-ayc;
+         if(abs(ax)<.36&&abs(ay)<.17){float tp=smoothstep(.17,-.17,ay);vec3 c=vec3(.90,.91,.90)*(.82+.18*tp);
+           if(ay<-.08)c*=.82+.12*step(.5,fract(ay*70.));                       // louvre slits
+           if(abs(ax+.24)<.05&&abs(ay-.08)<.025)c=vec3(.78,.04,.07);              // red logo mark
+           if(abs(ay-.02)<.012&&ax>-.1&&ax<.3)c*=.88;
+           sAlb=toLin(c);sRough=.5;sH=1.;sBump=.5;sAO=1.;}
+         else if(abs(ax)<.38&&ay<-.17&&ay>-.3){sAlb*=.7+.3*smoothstep(-.3,-.17,ay);}        // shadow under the unit
+         else if(abs(ax)<.05&&ay>.17&&ay<.9&&ym<SILL+WH*.5)sAlb=toLin(vec3(.86,.86,.84));       // pipe
+       }}
+     else if(hA>.93){float dxm=xm-side*(WW*.5+.5),dym=ym-(SILL+WH+.12);float rr=length(vec2(dxm,dym*1.1));
+       if(rr<.34){sAlb=toLin(mix(vec3(.74,.76,.78),vec3(.2,.2,.22),smoothstep(.1,.0,rr)));sRough=.5;sH=1.;}
+       else if(abs(dxm)<.025&&dym<-.3&&dym>-.6)sAlb=toLin(vec3(.3));}
+   }
+   if(fract(sd*7.3)>.35){float gx=abs(u-(L-.42));if(gx<.045){sAlb=toLin(vec3(.93,.72,.04));sRough=.45;sH=1.;sBump=.6;}}
+   if(fract(sd*5.7)>.55&&abs(v-2.35)<.045&&u>L*.25&&u<L-.42){sAlb=toLin(vec3(.93,.72,.04));sRough=.45;sH=1.;sBump=.6;}
+ }
  // compose windows
  if(inWin>.5){
    vec3 tng=normalize(vT);vec3 V=normalize(vW-cameraPosition);
@@ -321,6 +343,10 @@ const BLD_SURF=`
      if(cur<.35){room=mix(room,vec3(.86,.84,.78),.55);}
      else if(cur<.6&&(cuv.x<.22||cuv.x>.78)){room=cur<.47?vec3(.45,.16,.14):vec3(.62,.55,.38);}
      if(inWin<1.5){float mul=step(abs(cuv.x-.5),.02)+step(abs(cuv.y-.72),.025);if(mul>.5){inWin=0.;frame=1.;}}
+   }
+   if(inWin<1.5||inWin>3.5){
+     if(uWinter>.5){room=mix(room,vec3(.80,.86,.92),.22+.18*vn(vec2(u,v)*9.));if(h12(vec2(cell,2.2))<.5)room=mix(room,vec3(.55,.4,.28),.25)*1.1;}   // frosty glass, heavy curtains
+     else if(h12(vec2(cell,5.5))<.16&&cuv.x<.34){room=mix(room,vec3(.92,.9,.84),.55);}                                           // summer: window ajar, light curtain
    }
    if(inWin>2.5&&inWin<3.5){room=vec3(.20,.14,.10)*(.8+.3*vn(vec2(u,v)*6.));lit=0.;}
    if(inWin>4.5){room=vec3(.05,.05,.06);lit=0.;}
@@ -341,7 +367,7 @@ const BLD_SURF=`
  // This removes the shimmering/crawling of windows (worst at night, when lit windows are bright and bloom amplifies them).
  if(v>0.&&v<H&&!nowin){
    float px=max(length(vec2(dFdx(u),dFdy(u))),length(vec2(dFdx(v),dFdy(v))));
-   float lod=smoothstep(.035,.14,px/min(cs,FH));
+   float lod=smoothstep(.02,.085,px/min(cs,FH));
    if(lod>0.){
      float cov=logg?.55:clamp(WW*WH/(cs*FH),.08,.6);
      float pl=.30+.25*h12(vec2(row,sd*7.))*.5+.06;
@@ -385,7 +411,7 @@ function initMats(){
   MATS.props=patchMat(new THREE.MeshStandardMaterial({vertexColors:true,roughness:.8,metalness:0}),{key:'props',
     vDecl:'attribute float aM;varying float vM;',vMain:'vM=aM;',fDecl:'varying float vM;',fSurf:PROP_SURF});
   MATS.signs=patchMat(new THREE.MeshStandardMaterial({map:TX.signs,roughness:.5,metalness:0}),{key:'signs',fSurf:'sEmis=sAlb*(.05+uNight*1.8);'});
-  MATS.leaves=patchMat(new THREE.MeshStandardMaterial({map:TX.leaves,alphaTest:.45,side:THREE.DoubleSide,roughness:.8,metalness:0}),{key:'leaves',vDecl:'uniform float uTime;',
+  MATS.leaves=patchMat(new THREE.MeshStandardMaterial({map:TX.leaves,alphaTest:.3,alphaToCoverage:true,side:THREE.DoubleSide,roughness:.8,metalness:0}),{key:'leaves',vDecl:'uniform float uTime;',
     vBegin:'{float sw=sin(uTime*1.4+instanceMatrix[3].x*.3+instanceMatrix[3].z*.21)*.06*max(position.y-2.,0.)*.12;transformed.x+=sw;transformed.z+=sw*.7;}',
     fSurf:'if(uWinter>.5){if(vUv.y>.5)discard;sAlb=mix(sAlb,vec3(.55,.58,.62),.45);}sAlb*=1.45;sEmis=sAlb*.05;sAO=.85;'});
   MATS.leaves.vertexColors=false;
