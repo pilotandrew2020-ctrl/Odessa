@@ -1,0 +1,144 @@
+<title>My Odesa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;600;700&family=Unbounded:wght@600;800&display=swap">
+<style>
+/* Layout: full-bleed 3D canvas; glass panels pinned to corners; title card centred over a live city view */
+:root{
+  --ink:#0b1b22; --sea:#0e4a5c; --sea2:#13708a; --sun:#f2c14e; --chalk:#f5f1e8; --muted:#a9bcc2;
+  --glass:rgba(9,26,33,.64); --glass2:rgba(9,26,33,.82); --line:rgba(245,241,232,.16);
+  --f-disp:"Unbounded","Golos Text",system-ui,sans-serif; --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;background:#0b1b22;color:var(--chalk);font-family:var(--f-body);overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+#app{position:fixed;inset:0}
+#c{position:absolute;inset:0;width:100%;height:100%;display:block}
+button{font-family:var(--f-body);color:var(--chalk);background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+button:focus-visible{outline:2px solid var(--sun);outline-offset:2px}
+button.on{background:var(--sun);color:var(--ink);border-color:var(--sun)}
+#hud{position:absolute;inset:0;pointer-events:none}
+#hud>*{pointer-events:auto}
+#district{position:absolute;left:max(16px,env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top,0px));pointer-events:none;display:flex;flex-direction:column;gap:2px;text-shadow:0 1px 8px rgba(0,0,0,.55)}
+#dName{font-family:var(--f-disp);font-weight:800;font-size:20px;letter-spacing:.02em}
+#dSub{font-size:12px;color:var(--chalk);opacity:.85;letter-spacing:.06em;text-transform:uppercase}
+#mini{position:absolute;right:max(14px,env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top,0px));width:132px;height:132px;border-radius:50%;border:2px solid rgba(245,241,232,.7);box-shadow:0 4px 18px rgba(0,0,0,.35);pointer-events:none}
+#homeDir{position:absolute;right:max(14px,env(safe-area-inset-right));top:calc(152px + env(safe-area-inset-top,0px));width:132px;text-align:center;font-size:12px;font-weight:700;background:var(--glass);border-radius:999px;padding:5px 0;pointer-events:none;font-variant-numeric:tabular-nums}
+#topBtns{position:absolute;left:max(14px,env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top,0px));display:flex;gap:8px;flex-wrap:wrap;max-width:60vw}
+#actBtns{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:calc(18px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:repeat(2,auto);gap:10px;justify-items:end;align-items:end}
+#actBtns button{width:70px;height:70px;border-radius:50%;padding:0;font-size:13px}
+#bJump{grid-column:2;grid-row:1/3;width:92px!important;height:92px!important}
+#joy{position:absolute;left:0;bottom:0;width:48vw;height:58vh;pointer-events:auto}
+#joyBase{position:absolute;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:2px solid rgba(245,241,232,.45);background:rgba(9,26,33,.25);display:none;pointer-events:none}
+#joyKnob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(245,241,232,.85);pointer-events:none}
+#joyHint{position:absolute;left:max(18px,env(safe-area-inset-left));bottom:calc(22px + env(safe-area-inset-bottom,0px));font-size:12px;color:var(--chalk);opacity:.8;pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+#toast{position:absolute;left:50%;top:22%;width:min(86vw,640px);transform:translateX(-50%);pointer-events:none;text-align:center;opacity:0;transition:opacity .6s}
+#toast b{display:block;font-family:var(--f-disp);font-weight:800;font-size:clamp(22px,5vw,40px);letter-spacing:.01em;text-shadow:0 2px 14px rgba(0,0,0,.6)}
+#toast span{font-size:13px;letter-spacing:.12em;text-transform:uppercase;opacity:.9;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+#fade{position:absolute;inset:0;background:#0b1b22;opacity:0;pointer-events:none;transition:opacity .35s}
+/* map */
+#mapUI{position:absolute;inset:0;background:rgba(6,18,23,.94);display:flex;flex-direction:row}
+#mapWrap{position:relative;flex:1;min-width:0}
+#bigmap{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+#mapSide{width:min(320px,38vw);padding:calc(16px + env(safe-area-inset-top,0px)) 16px 16px;display:flex;flex-direction:column;gap:10px;overflow:auto;border-left:1px solid var(--line)}
+#mapSide h2{font-family:var(--f-disp);font-weight:800;font-size:18px;margin:0 0 4px}
+.place{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%}
+.place small{font-weight:400;color:var(--muted);font-size:12px}
+#mapTop{position:absolute;left:16px;top:calc(14px + env(safe-area-inset-top,0px));display:flex;gap:8px;flex-wrap:wrap}
+#goHere{position:absolute;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--sun);color:var(--ink);border-color:var(--sun);font-size:15px;padding:12px 20px}
+@media (max-aspect-ratio:1/1){#toast{top:30%}}
+@media (max-width:640px){#mapUI{flex-direction:column}#mapSide{width:auto;max-height:34vh;border-left:0;border-top:1px solid var(--line);padding-top:12px}}
+/* title */
+#menu{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:linear-gradient(180deg,rgba(11,27,34,.15),rgba(11,27,34,.72))}
+#card{width:min(520px,100%);background:var(--glass2);border:1px solid var(--line);border-radius:24px;padding:26px 24px 20px;display:flex;flex-direction:column;gap:14px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+#card h1{font-family:var(--f-disp);font-weight:800;font-size:clamp(30px,8vw,46px);line-height:1;margin:0;letter-spacing:-.01em;text-wrap:balance}
+#card h1 em{font-style:normal;color:var(--sun)}
+#card p{margin:0;line-height:1.5;font-size:15px;color:var(--chalk);opacity:.92;max-width:60ch}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:64px}
+#bStart{background:var(--sun);color:var(--ink);border-color:var(--sun);font-size:17px;padding:14px 18px;font-family:var(--f-disp);font-weight:800;letter-spacing:.02em}
+#bStart:disabled{opacity:.55}
+#card small{color:var(--muted);font-size:11.5px;line-height:1.45}
+.keys{font-size:12.5px;color:var(--muted);line-height:1.5}
+.keys b{color:var(--chalk);font-weight:600}
+#bAct{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:calc(196px + env(safe-area-inset-bottom,0px));background:var(--sun);color:var(--ink);border-color:var(--sun);font-size:15px;padding:12px 18px;border-radius:999px}
+#actBtns{grid-template-columns:repeat(3,auto)!important}
+#bJump{grid-column:3!important;grid-row:1/3}
+#spd{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;align-items:baseline;gap:6px;background:var(--glass);border-radius:16px;padding:6px 16px;pointer-events:none;font-variant-numeric:tabular-nums}#spd b{font-family:var(--f-disp);font-size:34px;font-weight:800;line-height:1}#spd span{font-size:12px;opacity:.8}
+@media (max-width:640px){#spd{left:max(16px,env(safe-area-inset-left));transform:none;bottom:calc(150px + env(safe-area-inset-bottom,0px))}#spd b{font-size:28px}}
+#spk{position:absolute;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(360px,calc(100vw - 32px));background:var(--glass2);border:1px solid var(--line);border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.spkTop{display:flex;justify-content:space-between;align-items:center;gap:8px}.spkTop b{font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#spkClose{padding:4px 10px}
+#spkList button.del{padding:6px 9px;margin-left:-4px;opacity:.75}
+#spk .row button{padding:8px 12px}
+#spkVol{flex:1;min-width:0;accent-color:var(--sun)}
+#spkList{display:flex;flex-direction:column;gap:6px;max-height:30vh;overflow:auto}
+#spkList button{text-align:left;padding:8px 10px;font-weight:600}
+.filebtn{position:relative;overflow:hidden;font-size:14px;font-weight:600;color:var(--chalk);background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:8px 12px;cursor:pointer;letter-spacing:0;text-transform:none;min-width:0}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+#spk small{color:var(--muted);font-size:11.5px}
+#liftUI{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(320px,calc(100vw - 32px));background:var(--glass2);border:1px solid var(--line);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:10px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+#liftBtns{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}#liftBtns button{padding:12px 0;font-size:17px;font-weight:700}
+@media (prefers-reduced-motion:reduce){#toast,#fade{transition:none}}
+#coHud{position:absolute;left:max(14px,env(safe-area-inset-left));top:calc(112px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:8px;align-items:flex-start;max-width:min(320px,70vw)}
+#coHud .coRow{display:flex;gap:8px}
+#coList{display:flex;flex-direction:column;gap:6px;background:var(--glass2);border:1px solid var(--line);border-radius:16px;padding:8px;width:min(300px,70vw)}
+#coList button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%}
+#coList small{font-weight:400;color:var(--muted);font-size:12px}
+.coEmpty{font-size:13px;color:var(--muted);line-height:1.45;padding:4px 6px}
+#chatBox{position:absolute;left:50%;bottom:calc(120px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(420px,calc(100vw - 32px));display:flex;gap:8px;background:var(--glass2);border:1px solid var(--line);border-radius:16px;padding:8px}
+#chatIn,#coName{flex:1;min-width:0;font:inherit;font-size:15px;color:var(--chalk);background:rgba(245,241,232,.08);border:1px solid var(--line);border-radius:12px;padding:10px 12px;-webkit-user-select:text;user-select:text}
+#chatIn:focus,#coName:focus{outline:2px solid var(--sun);outline-offset:1px}
+#coStatus{font-size:12px;color:var(--muted);line-height:1.4}
+#netCode{width:84px;flex:none;font:inherit;font-size:16px;letter-spacing:.2em;text-align:center;color:var(--chalk);background:rgba(245,241,232,.08);border:1px solid var(--line);border-radius:12px;padding:9px 8px;-webkit-user-select:text;user-select:text}
+#netStatus{font-size:12.5px;color:var(--muted);line-height:1.4}#netStatus.ok{color:var(--sun);font-weight:700;font-size:14px}
+#coOutfits{display:flex;gap:6px;flex-wrap:wrap}#coOutfits button{padding:8px 11px;font-size:13px}
+</style>
+<div id="app">
+  <canvas id="c"></canvas>
+  <div id="hud" hidden>
+    <div id="district"><span id="dName">Tairove</span><span id="dSub">Odesa</span></div>
+    <canvas id="mini" width="264" height="264"></canvas>
+    <div id="homeDir">Home · 0 m</div>
+    <div id="coHud" hidden><div class="coRow"><button id="bFriends" hidden>👥 0</button><button id="bChat">💬 Chat</button></div><div id="coList" hidden></div></div>
+    <div id="chatBox" hidden><input id="chatIn" maxlength="80" placeholder="Say something… (Enter)" autocomplete="off"><button id="chatSend">Send</button></div>
+    <div id="topBtns"><button id="bMap">Map</button><button id="bTime">Day</button><button id="bMenu">Menu</button></div>
+    <div id="joy"><div id="joyBase"><div id="joyKnob"></div></div><div id="joyHint">Drag to walk</div></div>
+    <button id="bAct" hidden>Action</button>
+    <div id="actBtns"><button id="bRun">Run</button><button id="bJump">Jump</button><button id="bScoot">Scooter</button><button id="bSpk">Speaker</button><button id="bCar">Car</button></div>
+    <div id="spd" hidden><b id="spdN">0</b><span>km/h</span></div>
+    <div id="spk" hidden>
+      <div class="spkTop"><b id="spkName">Speaker is off</b><button id="spkClose" aria-label="Close">×</button></div>
+      <div class="row"><button id="spkPrev">⏮</button><button id="spkPlay">▶</button><button id="spkNext">⏭</button><input id="spkVol" type="range" min="0" max="100" value="70" aria-label="Volume"></div>
+      <div id="spkList"></div>
+      <div class="row"><label class="filebtn">Your tracks<input id="spkFile" type="file" accept="audio/*" multiple></label><button id="spkCarry">Put it down</button></div>
+      <small>Your tracks — mp3s from your phone or laptop. They are saved in this browser for next time.</small>
+    </div>
+    <div id="liftUI" hidden><div class="spkTop"><b>Lift · which floor?</b><button id="liftClose" aria-label="Close">×</button></div><div id="liftBtns"></div><small style="color:var(--muted);font-size:11.5px">Your flat — any floor, standard layout.</small></div>
+    <div id="toast"><b id="tB"></b><span id="tS"></span></div>
+  </div>
+  <div id="mapUI" hidden>
+    <div id="mapWrap"><canvas id="bigmap"></canvas>
+      <div id="mapTop"><button id="mapClose">Back</button><button id="mapMe">Where am I</button><button id="mapFit">Whole city</button></div>
+      <button id="goHere" hidden>Teleport here</button>
+    </div>
+    <div id="mapSide"><h2>Places</h2><div id="placeList" style="display:flex;flex-direction:column;gap:8px"></div></div>
+  </div>
+  <div id="menu">
+    <div id="card">
+      <h1>My <em>Odesa</em></h1>
+      <p>Every street and building of Odesa from the real map, with real terrain. You start in Andrii's yard on Chykalenka St (formerly Williams), 59k. Go into the stairwell and the flat, the supermarket, the pharmacy, the Opera House and the railway station, ride the tram and walk around with a speaker. Play together with friends in co-op.</p>
+      <div class="row"><label>Time</label><button data-t="day" class="on">Day</button><button data-t="dusk">Sunset</button><button data-t="night">Night</button></div>
+      <div class="row"><label>Season</label><button data-s="summer" class="on">Summer</button><button data-s="winter">Winter</button></div>
+      <div class="row"><label>Graphics</label><button data-g="low">Low</button><button data-g="mid" class="on">Medium</button><button data-g="high">High</button></div>
+      <div class="row"><label for="coName">Name</label><input id="coName" maxlength="16" placeholder="Your name, e.g. Liam" autocomplete="off"></div>
+      <div class="row"><label>Outfit</label><div id="coOutfits"></div></div>
+      <div class="row netRow"><label>Online</label><button id="netCreate">Create room</button><input id="netCode" inputmode="numeric" maxlength="4" placeholder="Code" autocomplete="off"><button id="netJoin">Join</button></div>
+      <div id="netStatus">No account needed: one of you presses Create room, the other types the code and presses Join.</div>
+      <button id="bStart" disabled>Loading the map…</button>
+      <div id="coStatus">Co-op: …</div>
+      <div class="keys" id="keysTxt"><b>WASD</b> walk · <b>Shift</b> run · <b>Space</b> jump · <b>E</b> action (enter, sit, tram) · <b>F</b> scooter · <b>C</b> car (H — horn) · <b>Q</b> speaker · <b>M</b> map · <b>T</b> chat · <b>G</b> go to friend · mouse turns the camera</div>
+      <small>Map: © OpenStreetMap contributors (ODbL). Terrain: SRTM (NASA). The yard, station, opera, sea terminal, stairs and parks were hand-built from photos.</small>
+    </div>
+  </div>
+  <div id="fade"></div>
+</div>
