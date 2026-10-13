@@ -5032,7 +5032,14 @@ const NET={active:false,code:'',cid:'',ws:null,rest:new Uint8Array(0),seen:new M
     this.st('Connecting to room '+code+'…');
     if(typeof WebSocket==='undefined'){this.st('This browser cannot connect online.');return}
     const ok=await this.open(gen,true);if(gen!==this.gen)return;
-    if(!ok){this.st('Could not reach the online server (it may be blocked on this network). Try again, or use the Claude link.');return}
+    if(!ok){
+      // external relay blocked: fall back to a private named Claude room
+      const lobby=COOP.lobby;if(!lobby||!lobby.join){this.st('Online is blocked here, and Claude co-op is off for this account. Ask the owner to open the game from the Claude link.');return}
+      this.st('Joining room '+code+' through Claude…');
+      try{const r=await lobby.join('od'+code);if(gen!==this.gen)return;this.code=code;this.active=false;await COOP.useRoom(r,code);
+        this.st('Room code: '+code+' (via Claude) — friends type it and press Join',true);$('netCode').value=code}
+      catch(e){this.st('Could not join the room ('+((e&&e.code)||'error')+'). Try again.')}
+      return}
     // leave the shared Claude lobby: this room is private to the code
     for(const u of COOP.unsubs||[])try{u()}catch(e){}COOP.unsubs=[];COOP.room=null;COOP.clearAll();
     this.active=true;COOP.myId='n:'+this.cid;
