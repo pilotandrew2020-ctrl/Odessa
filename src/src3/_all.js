@@ -4716,7 +4716,7 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
     addEventListener('keydown',e=>{if(!started||document.activeElement===ci)return;if(e.code==='KeyT'){e.preventDefault();this.openChat()}if(e.code==='KeyG')this.goTo(this.nearest())})},
   markOutfit(){document.querySelectorAll('#coOutfits button').forEach(b=>b.classList.toggle('on',+b.dataset.o===this.me.outfit))},
   status(t){const s=$('coStatus');if(s)s.textContent=t},
-  online(){return !!this.room},
+  online(){return !!this.room||NET.active},
   async init(){
     this.status('Co-op: connecting…');
     let room=null;try{if(window.claude&&window.claude.use)room=await window.claude.use('room')}catch(e){room=null}
@@ -4777,7 +4777,7 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
     if(this.say){st.say=this.say.m;st.sayT=this.say.t}
     if(typeof HS!=='undefined'){const h=HS.pub();if(h)st.hs=h;if(HS.on&&HS.role==='H'&&HS.camo&&!HS.myFound)st.cc=parseInt(HS.camo.slice(1),16)}
     const key=JSON.stringify(st);const now=performance.now();
-    if(NET.active&&(force||key!==this.lastN||now-(this.lastNT||0)>1000)){this.lastN=key;this.lastNT=now;NET.send(st)}
+    if(NET.active&&(force||key!==this.lastN||now-(this.lastNT||0)>1000)){if(NET.send(st,force)){this.lastN=key;this.lastNT=now}}
     if(this.room&&(force||key!==this.last)){this.last=key;this.room.presence(st).catch(()=>{})}},
   // ---------- chat ----------
   openChat(){if(!started)return;$('chatBox').hidden=false;const ci=$('chatIn');ci.value='';setTimeout(()=>ci.focus(),30)},
@@ -4822,18 +4822,61 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
 };
 function teleportRawNear(x,z,yaw){player.x=x-Math.sin(yaw||0)*1.5;player.z=z-Math.cos(yaw||0)*1.5;player.vx=player.vz=0;toast('Next to your friend','')}
 
-// ===================== room codes: private named rooms through the Claude room (no WebRTC, works on iPad) =====================
-const NET={active:false,code:'',
+// ===================== room codes through a public MQTT-over-WebSocket relay (no WebRTC, no Claude account needed) =====================
+const MQ={
+  urls:['wss://broker.hivemq.com:8884/mqtt','wss://broker.emqx.io:8084/mqtt','wss://test.mosquitto.org:8081'],
+  enc:new TextEncoder(),dec:new TextDecoder(),
+  str(s){const b=this.enc.encode(s);return [b.length>>8,b.length&255,...b]},
+  pkt(type,flags,body){const len=[];let n=body.length;do{let d=n%128;n=Math.floor(n/128);if(n>0)d|=128;len.push(d)}while(n>0);return new Uint8Array([(type<<4)|flags,...len,...body])},
+  connect(cid,wt,wp){const w=this.enc.encode(wp);return this.pkt(1,0,[...this.str('MQTT'),4,0x06,0,30,...this.str(cid),...this.str(wt),w.length>>8,w.length&255,...w])},
+  sub(topic){return this.pkt(8,2,[0,1,...this.str(topic),0])},
+  pub(topic,payload){return this.pkt(3,0,[...this.str(topic),...this.enc.encode(payload)])},
+  ping(){return new Uint8Array([0xC0,0])},
+  // split a byte stream into packets: returns [{type,body}] and the leftover bytes
+  parse(buf){const out=[];let i=0;while(i+2<=buf.length){let m=1,v=0,j=i+1,b;do{if(j>=buf.length)return {out,rest:buf.slice(i)};b=buf[j++];v+=(b&127)*m;m*=128}while(b&128);
+    if(j+v>buf.length)break;out.push({type:buf[i]>>4,body:buf.slice(j,j+v)});i=j+v}return {out,rest:buf.slice(i)}}
+};
+const NET={active:false,code:'',cid:'',ws:null,rest:new Uint8Array(0),seen:new Map(),lastSend:0,ping:0,sweep:0,gen:0,retry:0,
   st(t,ok){const e=$('netStatus');if(e){e.textContent=t;e.classList.toggle('ok',!!ok)}},
+  topic(id){return 'myodesa/v2/'+this.code+'/'+id},
+  stop(){this.gen++;clearInterval(this.ping);clearInterval(this.sweep);clearTimeout(this.retry);if(this.ws){try{this.ws.onclose=null;this.ws.close()}catch(e){}this.ws=null}this.active=false},
+  // open a socket to the first broker that answers
+  open(gen,first){return new Promise(res=>{let i=0;const next=()=>{if(gen!==this.gen)return res(false);if(i>=MQ.urls.length)return res(false);const url=MQ.urls[i++];let done=false,ok=false,ws;
+      const fail=()=>{if(done)return;done=true;try{ws.close()}catch(e){}next()};
+      try{ws=new WebSocket(url,'mqtt')}catch(e){return next()}
+      ws.binaryType='arraybuffer';const to=setTimeout(fail,6000);
+      ws.onopen=()=>ws.send(MQ.connect('od'+this.cid,this.topic(this.cid),'{"gone":1}'));
+      ws.onerror=()=>{clearTimeout(to);fail()};
+      ws.onclose=()=>{clearTimeout(to);if(ok)this.lost(gen,ws);else fail()};
+      ws.onmessage=ev=>{const buf=new Uint8Array(ev.data);const all=new Uint8Array(this.rest.length+buf.length);all.set(this.rest);all.set(buf,this.rest.length);
+        const {out,rest}=MQ.parse(all);this.rest=rest;
+        for(const p of out){
+          if(p.type===2&&!done){clearTimeout(to);if(p.body[1]!==0){fail();return}done=true;ok=true;this.ws=ws;ws.send(MQ.sub('myodesa/v2/'+this.code+'/+'));res(true)}
+          else if(p.type===3)this.msg(p.body)}}};next()})},
+  msg(b){const tl=(b[0]<<8)|b[1];const topic=MQ.dec.decode(b.slice(2,2+tl));const id=topic.split('/').pop();if(id===this.cid)return;
+    let st=null;try{st=JSON.parse(MQ.dec.decode(b.slice(2+tl)))}catch(e){return}
+    if(!st||typeof st!=='object')return;
+    if(st.gone){this.seen.delete(id);COOP.netRemove(id);COOP.status(COOP.countText());return}
+    const isNew=!this.seen.has(id);this.seen.set(id,performance.now());COOP.netUpsert(id,st);if(isNew)COOP.status(COOP.countText())},
+  lost(gen,ws){if(gen!==this.gen||!this.active)return;this.ws=null;this.st('Connection lost — reconnecting…');
+    this.retry=setTimeout(async()=>{if(gen!==this.gen)return;this.rest=new Uint8Array(0);const ok=await this.open(gen);if(gen!==this.gen)return;if(ok)this.st('Room code: '+this.code+' — reconnected',true);else this.lost(gen,null)},3000)},
   async enter(code){
-    const lobby=COOP.lobby;if(!lobby||!lobby.join){this.st('Co-op is not available here. Open the game from the Claude link.');return}
-    this.st('Joining room '+code+'…');
-    try{const r=await lobby.join('od'+code);this.code=code;this.active=true;await COOP.useRoom(r,code);
-      this.st('Room code: '+code+' — tell your friends to type it and press Join',true);$('netCode').value=code}
-    catch(e){this.st('Could not join the room ('+((e&&e.code)||'error')+'). Try again.')}},
+    this.stop();const gen=this.gen;this.code=code;this.cid=Math.random().toString(36).slice(2,10);this.rest=new Uint8Array(0);this.seen.clear();
+    this.st('Connecting to room '+code+'…');
+    if(typeof WebSocket==='undefined'){this.st('This browser cannot connect online.');return}
+    const ok=await this.open(gen,true);if(gen!==this.gen)return;
+    if(!ok){this.st('Could not reach the online server (it may be blocked on this network). Try again, or use the Claude link.');return}
+    // leave the shared Claude lobby: this room is private to the code
+    for(const u of COOP.unsubs||[])try{u()}catch(e){}COOP.unsubs=[];COOP.room=null;COOP.clearAll();
+    this.active=true;COOP.myId='n:'+this.cid;
+    this.ping=setInterval(()=>{if(this.ws&&this.ws.readyState===1)this.ws.send(MQ.ping())},20000);
+    this.sweep=setInterval(()=>{const now=performance.now();for(const [id,t] of this.seen)if(now-t>7000){this.seen.delete(id);COOP.netRemove(id);COOP.status(COOP.countText())}},2000);
+    this.st('Room code: '+code+' — tell your friends to type it and press Join',true);$('netCode').value=code;
+    COOP.status(COOP.countText());COOP.push(true)},
   create(){this.enter(String(1000+Math.floor(Math.random()*9000)))},
   join(raw){const code=String(raw||'').replace(/\D/g,'').slice(0,4);if(code.length!==4){this.st('Type the 4-digit room code');return}this.enter(code)},
-  send(){}
+  send(st,force){const now=performance.now();if(!this.ws||this.ws.readyState!==1)return false;if(!force&&now-this.lastSend<110)return false;this.lastSend=now;
+    try{this.ws.send(MQ.pub(this.topic(this.cid),JSON.stringify(st)))}catch(e){return false}return true}
 };
 
 // ===================== Hide & Seek (2–10 players): presence-only, no extra network =====================
