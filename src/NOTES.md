@@ -16,3 +16,8 @@ Open: user photos to refine gas-station spot and details.
 - Buses: CAR_DEFS[8] city bus + marshrutka type 3 spawn only on class<=1 roads with route number from BUS_ROUTES/MARSH_ROUTES (hash of way id; geometry approximate, numbers from user's maps). Route plates = pooled meshes (updateRoutePlates).
 - Bus stops (OSM k===3) are moved to the curb (nearRoadPt) and registered in BUS_STOPS; buses slow down and dwell 5–10 s there.
 - TODO: trolleybuses, landmarks from user, Deribasivska, Potemkin stairs.
+
+## Hosting (important)
+- Claude artifact (EVCkmhTZ6PooYUEgLcjC9x): friends need admitted Claude accounts for rooms; external servers blocked there.
+- Standalone site: Cloudflare Workers static assets (wrangler.jsonc, assets dir `public/`), auto-built from GitHub main. Co-op works there via public MQTT relay (o_coop.js MQ/NET) — user confirmed it works, incl. at school.
+- After every build: `cp src/odesa.html public/index.html` (and index.html for GitHub Pages), commit+push so Cloudflare redeploys; also publish to the artifact.
