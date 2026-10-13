@@ -643,7 +643,7 @@ vec3 roomColor(vec2 c,vec2 ws,float sill,vec3 rd,float sd,float lit){
 }
 `;
 const BLD_SURF=`
- float st=vP.x, fl=vP.y, sd=vP.z/255., L=vP.w;
+ float st=floor(vP.x+.5), fl=vP.y, sd=floor(vP.z+.5)/255., L=vP.w;   // round the interpolated per-wall id: float error here made window hashes flip per pixel (speckled windows)
  vec3 n=normalize(vNw);
  float u=vUV.x, v=vUV.y;
  bool home=st>8.5&&st<9.5;bool homeYard=vQ>8.5&&vQ<9.5;bool homeStreet=vQ>9.5&&vQ<10.5;bool shopW=(vQ>7.5&&vQ<8.5)||homeStreet;bool entW=vQ>10.5||homeYard;
@@ -805,6 +805,10 @@ const BLD_SURF=`
    else if(!ground){float hw=WW/cs*.5;cuv=vec2((fu-.5+hw)/(2.*hw),(fv*FH-SILL)/WH);}
    else {float hw=WW/cs*.5;cuv=vec2((fu-.5+hw)/(2.*hw),(v-1.2)/(GF-2.2));wsz=vec2(WW,GF-2.2);glassSill=1.2;}
    vec3 room=roomColor(clamp(cuv,0.,1.),wsz,glassSill,rd,cell,lit);
+   {float px0=max(length(vec2(dFdx(u),dFdy(u))),length(vec2(dFdx(v),dFdy(v))))/min(cs,FH);
+    float dtl=1.-smoothstep(.004,.03,px0);                       // far windows: fade the room details (wardrobe, sofa, lamp) into a flat average
+    float ha=h12(vec2(cell,7.3));vec3 avgR=(ha<.25?vec3(.78,.72,.58):ha<.5?vec3(.62,.70,.66):ha<.75?vec3(.80,.66,.62):vec3(.70,.70,.76))*.62*(1.+(lit>.5?.4:0.));
+    room=mix(avgR,room,dtl);}
    float cur=h12(vec2(cell,9.1));
    if(inWin<1.5||inWin>3.5){ // curtains / tulle
      if(cur<.35){room=mix(room,vec3(.86,.84,.78),.55);}
@@ -834,7 +838,7 @@ const BLD_SURF=`
  // This removes the shimmering/crawling of windows (worst at night, when lit windows are bright and bloom amplifies them).
  if(v>0.&&v<H&&!nowin){
    float px=max(length(vec2(dFdx(u),dFdy(u))),length(vec2(dFdx(v),dFdy(v))));
-   float lod=smoothstep(.02,.085,px/min(cs,FH));
+   float lod=smoothstep(mix(.02,.012,uNight),mix(.085,.055,uNight),px/min(cs,FH));
    if(lod>0.){
      float cov=logg?.55:clamp(WW*WH/(cs*FH),.08,.6);
      float pl=.30+.25*h12(vec2(row,sd*7.))*.5+.06;
