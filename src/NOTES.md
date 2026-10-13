@@ -21,3 +21,8 @@ Open: user photos to refine gas-station spot and details.
 - Claude artifact (EVCkmhTZ6PooYUEgLcjC9x): friends need admitted Claude accounts for rooms; external servers blocked there.
 - Standalone site: Cloudflare Workers static assets (wrangler.jsonc, assets dir `public/`), auto-built from GitHub main. Co-op works there via public MQTT relay (o_coop.js MQ/NET) — user confirmed it works, incl. at school.
 - After every build: `cp src/odesa.html public/index.html` (and index.html for GitHub Pages), commit+push so Cloudflare redeploys; also publish to the artifact.
+
+## Arena mode (guns) — o_guns.js
+- "Armed" toggle in topBtns; weapons 1-6 (Glock 17, Desert Eagle, .357 Magnum, Uzi, Bazooka, C4); F/FIRE shoots, E/Detonate.
+- Shooter does hitscan and publishes hits in presence (st.g.hit=[seq,to,dmg]); victim applies damage; only Armed players can be hurt. Explosions: st.g.ex; kill feed st.g.kb. Cartoon, no blood.
+- Works over both the MQTT relay and Claude room (via COOP.push). 2-20 players limited only by relay/presence size; avatars are heavy (many meshes) so >12 may lag on iPad.

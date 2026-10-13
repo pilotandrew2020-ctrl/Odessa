@@ -100,6 +100,7 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
     if(ret){st.rx=r2(ret.x);st.rz=r2(ret.z);st.rr=r2(ret.yaw||0);st.zt=(ind&&ind.title)||''}
     if(typeof DRIVE!=='undefined'&&DRIVE.on&&DRIVE.car){st.x=r2(DRIVE.car.x);st.z=r2(DRIVE.car.z);st.y=r2(DRIVE.car.y);st.r=r2(DRIVE.car.yaw||0)}
     if(this.say){st.say=this.say.m;st.sayT=this.say.t}
+    if(typeof GUN!=='undefined'){const g=GUN.pub();if(g)st.g=g}
     if(typeof HS!=='undefined'){const h=HS.pub();if(h)st.hs=h;if(HS.on&&HS.role==='H'&&HS.camo&&!HS.myFound)st.cc=parseInt(HS.camo.slice(1),16)}
     const key=JSON.stringify(st);const now=performance.now();
     if(NET.active&&(force||key!==this.lastN||now-(this.lastNT||0)>1000)){if(NET.send(st,force)){this.lastN=key;this.lastNT=now}}

@@ -602,6 +602,7 @@ function adaptRes(dt){ftAcc+=dt;ftN++;ftT+=dt;if(ftT<2.5)return;const avg=ftAcc/
 // ---------- init ----------
 async function boot(){
   try{COOP.initMenu()}catch(e){console.error('coop menu',e)}
+  try{GUN.build()}catch(e){console.error('guns build',e)}
   try{HS.build()}catch(e){console.error('hs build',e)}
   try{await decodeData()}catch(e){$('bStart').textContent='Couldn\'t load the map';console.error(e);return}
   $('bStart').textContent='Painting textures…';await new Promise(r=>setTimeout(r,30));
