@@ -168,10 +168,10 @@ const HAIR=[0x2a1d14,0x5a3a22,0x111111,0xb8925a,0x8a8a8a,0x6b2b1a];
 function laneOff(c){return c===0?2.5:(c===1?1.75:1.15)}
 function segInfo(ri,dir){const P=D.nodes,wn=D.wn;const a=dir>0?wn[ri]:wn[ri+1],b=dir>0?wn[ri+1]:wn[ri];
   const ax=P[a*2],az=P[a*2+1],bx=P[b*2],bz=P[b*2+1];const L=Math.hypot(bx-ax,bz-az)||.01;return {ax,az,bx,bz,L,tx:(bx-ax)/L,tz:(bz-az)/L,end:b}}
-function nextSeg(ri,dir,forCar){
+function nextSeg(ri,dir,forCar,maxCls){
   const info=segInfo(ri,dir);const node=info.end;const opts=[];
   for(let q=D.adjS[node];q<D.adjS[node+1];q++){const r=D.adj[q],k2=D.wOf[r],c2=D.wcls[k2],f2=D.wfl[k2];
-    if(forCar&&(c2>2||f2===1))continue;if(f2===2)continue;
+    if(forCar&&(c2>2||f2===1))continue;if(f2===2)continue;if(maxCls!==undefined&&c2>maxCls)continue;
     const s0=D.wstart[k2],s1=D.wstart[k2+1]-1;
     const P=D.nodes,nw=n=>NO_WALK.length&&insideOBB(NO_WALK,P[n*2],P[n*2+1],.5);
     if(r<s1&&!(r===ri&&dir===-1)&&!nw(D.wn[r+1]))opts.push([r,1]);if(r>s0&&!(r-1===ri&&dir===1)&&!nw(D.wn[r-1]))opts.push([r-1,-1])}
@@ -228,7 +228,7 @@ function spawnCar(px,pz,near){
   const route=(type===8||type===3)?routeFor(D.wOf[ri],type):null;
   let col=CAR_COLS[Math.floor(Math.random()*CAR_COLS.length)];if(type===3)col=Math.random()<.6?0xf2c94c:0xf1f1ee;if(type===8)col=[0x2a5aa0,0xe0a526,0xc22a2a,0xf1f1ee,0x2e7d4f][Math.floor(Math.random()*5)];
   const c=D.wcls[D.wOf[ri]];
-  return {ri,dir,s:Math.random()*s.L,v:0,vmax:(c===0?13:10)*(.8+Math.random()*.35),type,col,route,dw:0,lastStop:-1,x:s.ax,y:0,z:s.az,yaw:Math.atan2(s.tx,s.tz),roll:0,pitch:0};
+  return {ri,dir,s:Math.random()*s.L,v:0,vmax:((type===8||type===3)?8.5:c===0?13:10)*(.8+Math.random()*.35),type,col,route,dw:0,lastStop:-1,x:s.ax,y:0,z:s.az,yaw:Math.atan2(s.tx,s.tz),roll:0,pitch:0};
 }
 function updateCars(dt,player,maxN){
   while(CARS.length<maxN){const c=spawnCar(player.x,player.z,CARS.length<maxN/2&&!updateCars.init);if(!c)break;CARS.push(c)}
@@ -237,17 +237,17 @@ function updateCars(dt,player,maxN){
     if(Math.hypot(c.x-player.x,c.z-player.z)>400){CARS.splice(i,1);continue}
     let s=segInfo(c.ri,c.dir);let tgt=c.vmax;if(s.L<14)tgt=Math.min(tgt,6.5);
     const fx=Math.sin(c.yaw),fz=Math.cos(c.yaw);
-    const chk=(ox,oz,r)=>{const rx=ox-c.x,rz=oz-c.z;const ahead=rx*fx+rz*fz,lat=Math.abs(rx*fz-rz*fx);if(ahead>0&&ahead<r&&lat<2.0)tgt=Math.min(tgt,Math.max(0,(ahead-5.5)*1.2))};
+    const big=c.type===8?1:c.type===3?.5:0;const chk=(ox,oz,r)=>{const rx=ox-c.x,rz=oz-c.z;const ahead=rx*fx+rz*fz,lat=Math.abs(rx*fz-rz*fx);r+=big*10;if(ahead>0&&ahead<r&&lat<2.0+big*.9)tgt=Math.min(tgt,Math.max(0,(ahead-5.5-big*5.5)*1.2))};
     chk(player.x,player.z,15);for(const o of CARS){if(o!==c)chk(o.x,o.z,13)}
     if(c.route){
       if(c.dw>0){c.dw-=dt;tgt=0}
       else{const nbx=-s.tz,nbz=s.tx;
         for(const b of BUS_STOPS){const rx=b.x-c.x,rz=b.z-c.z;const ahead=rx*fx+rz*fz;if(ahead<-1||ahead>16||b.id===c.lastStop)continue;
           if(Math.abs(rx*fz-rz*fx)>7||(b.nx*nbx+b.nz*nbz)<.3)continue;
-          tgt=Math.min(tgt,Math.max(0,(ahead-2.2)*.8));if(ahead<3.6&&c.v<.6){c.dw=5+Math.random()*5;c.lastStop=b.id}break}}
+          tgt=Math.min(tgt,Math.max(0,(ahead-2.2)*.8));if(ahead<3.6&&c.v<.6){c.dw=16+Math.random()*10;c.lastStop=b.id}break}}
     }
     c.v+=(tgt-c.v)*Math.min(1,dt*(tgt<c.v?3.5:1.2));c.s+=c.v*dt;
-    let guard=0;while(c.s>s.L&&guard++<8){c.s-=s.L;[c.ri,c.dir]=nextSeg(c.ri,c.dir,true);s=segInfo(c.ri,c.dir)}
+    let guard=0;while(c.s>s.L&&guard++<8){c.s-=s.L;[c.ri,c.dir]=nextSeg(c.ri,c.dir,true,c.route?1:undefined);s=segInfo(c.ri,c.dir)}
     const cl=D.wcls[D.wOf[c.ri]];const off=laneOff(cl);const nx=-s.tz,nz=s.tx;
     const x=s.ax+s.tx*c.s+nx*off,z=s.az+s.tz*c.s+nz*off;
     c.x=x;c.z=z;const y=groundH(x,z);const yf=groundH(x+s.tx*2,z+s.tz*2);c.y=y+.08;c.pitch=-Math.atan2(yf-y,2)*.8;

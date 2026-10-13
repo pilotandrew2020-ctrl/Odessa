@@ -462,7 +462,7 @@ function updateHUD(dt){
   let best=null,bd=1e9;for(const it of INTERACT){if(it.cond&&!it.cond())continue;const d=Math.hypot(it.x-player.x,it.z-player.z);if(d<it.r&&Math.abs((it.y||player.y)-player.y)<2.5&&d<bd){bd=d;best=it}}
   if(player.sit)best={label:'Stand up',fn:()=>{player.sit=null}};
   if(DRIVE.on)best={label:'Get out of the car',fn:exitCar};
-  if(RIDE.on)best={label:RIDE.tram&&RIDE.tram.kind==='cable'?'Get off the cable car':'Get off the tram',fn:leaveTram};
+  if(RIDE.on)best={label:RIDE.tram&&RIDE.tram.kind==='cable'?'Get off the cable car':RIDE.tram&&RIDE.tram.kind==='funi'?'Get off the funicular':RIDE.tram&&RIDE.tram.kind==='bus'?'Get off the bus':RIDE.tram&&RIDE.tram.kind==='pass'?'Get out of the car':'Get off the tram',fn:leaveTram};
   curAct=best;const ab=$('bAct');if(best){ab.hidden=false;ab.textContent=(TOUCH?'':'E · ')+best.label}else ab.hidden=true;
   if(miniT<=0){miniT=.1;drawMini()}
 }
@@ -615,7 +615,7 @@ async function boot(){
   initMats();LEAF_DEPTH=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking,map:TX.leaves,alphaTest:.45});
   makeTreeSpecies();TREES.init(scene);makeSkies();makeSea();makeSnow();
   $('bStart').textContent='Building the city…';await new Promise(r=>setTimeout(r,30));
-  buildAllLandmarks(scene);try{initTrams()}catch(e){console.error('trams',e)}
+  buildAllLandmarks(scene);try{initTrams()}catch(e){console.error('trams',e)}try{initRides()}catch(e){console.error('rides',e)}
   PLR=makePlayer();PLR.root.traverse(o=>{if(o.isMesh){o.castShadow=true}});scene.add(PLR.root);
   initPeopleMeshes(scene,100);initCarMeshes(scene,20);
   applyQuality();applyTime();
@@ -636,7 +636,7 @@ function loop(t){
   if(started&&$('mapUI').hidden){
     refreshCarObb();if(DRIVE.on)stepDrive(dt);else if(!RIDE.on)stepPlayer(dt);
     if(PORTAL.cur){stepIntPeds(dt);placePeople(PORTAL.peds)}
-    else{updateCars(dt,player,Qp().cars);updatePeds(dt,player,Qp().peds);if(typeof updateTrams!=='undefined')updateTrams(dt);if(PARKED_DIRTY||(lightTick%60===0)){refreshParked(chunks,player.x,player.z);PARKED_DIRTY=false}dodgeCar(PEDS);dodgeCar(TALKERS);placeCars(DRIVE.car?CARS.concat([DRIVE.car]):CARS);updateRoutePlates(scene,player);placePeople(crowdList());
+    else{updateCars(dt,player,Qp().cars);updatePeds(dt,player,Qp().peds);if(typeof updateTrams!=='undefined')updateTrams(dt);if(PARKED_DIRTY||(lightTick%60===0)){refreshParked(chunks,player.x,player.z);PARKED_DIRTY=false}dodgeCar(PEDS);dodgeCar(TALKERS);placeCars((DRIVE.car?CARS.concat([DRIVE.car]):CARS).concat(typeof COOP!=='undefined'?COOP.carList():[]));updateRoutePlates(scene,player);placePeople(crowdList());
       TREES.update(player.x,player.z,Qp().trees)}
     updateIndoor(dt);updateHUD(dt);COOP.update(dt);
     if((typeof SPK!=='undefined')&&SPK)SPK.update(dt);
@@ -656,7 +656,8 @@ function loop(t){
     sunL.target.position.copy(_ST);sunL.position.copy(_ST).addScaledVector(_SL,300);}
   else sunL.position.copy(sunDir).multiplyScalar(300).add(camera.position);
   updateSnow(dt);
-  renderer.info.reset();if(composer)composer.render();else renderer.render(scene,camera);
+  renderer.info.reset();const _shk=(typeof FX!=='undefined'&&FX.ready)?FX.shakeOff(dt):null;if(_shk)camera.position.add(_shk);
+  if(composer)composer.render();else renderer.render(scene,camera);if(_shk)camera.position.sub(_shk);
 }
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{S.time=b.dataset.t;saveS();if(renderer)applyTime()});
 document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{S.season=b.dataset.s;saveS();if(renderer)applyTime()});

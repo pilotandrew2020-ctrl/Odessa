@@ -85,6 +85,7 @@ function rawH(x,z){
 }
 function groundH(x,z){let h=rawH(x,z);
   for(let i=0;i<FLAT.length;i++){const f=FLAT[i];const dx=x-f.x,dz=z-f.z;if(dx>f.R||dx<-f.R||dz>f.R||dz<-f.R)continue;
+    if(f.fn){h=f.fn(x,z,h);continue}
     if(f.ramp){const u=dx*f.tx+dz*f.tz,v=Math.abs(-dx*f.tz+dz*f.tx);const du=u<0?-u:(u>f.L?u-f.L:0),dv=Math.max(0,v-f.hw);const d=Math.hypot(du,dv);if(d>=f.b)continue;
       const hr=f.h0+(f.h1-f.h0)*Math.min(1,Math.max(0,u/f.L));if(f.cut&&h<hr)continue;let t=d/f.b;t=t*t*(3-2*t);h=hr+(h-hr)*t;continue}
     let d;if(f.u){const u=Math.abs(dx*f.ca+dz*f.sa)-f.u,v=Math.abs(-dx*f.sa+dz*f.ca)-f.v;d=Math.hypot(Math.max(u,0),Math.max(v,0));}else{d=Math.max(0,Math.sqrt(dx*dx+dz*dz)-f.r)}

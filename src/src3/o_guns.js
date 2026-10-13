@@ -7,9 +7,10 @@ const WEAPONS=[
   {n:'.357 Magnum',k:'3',dmg:55,cd:.85,auto:false,spread:.004,col:0x8d9298},
   {n:'Uzi',        k:'4',dmg:10,cd:.065,auto:true, spread:.04, col:0x222428},
   {n:'Bazooka',    k:'5',dmg:95,cd:2.4,auto:false,spread:0,   col:0x4d6b3a,rocket:true},
-  {n:'C4',         k:'6',dmg:100,cd:.6,auto:false,spread:0,   col:0xd8cfa8,c4:true}];
+  {n:'C4',         k:'6',dmg:100,cd:.6,auto:false,spread:0,   col:0xd8cfa8,c4:true},
+  {n:'Mini-nuke',  k:'7',dmg:100,cd:7,auto:false,spread:0,   col:0x5a5f52,rocket:true,nuke:true}];
 const GUN={armed:false,w:0,hp:100,kills:0,deaths:0,cd:0,shots:0,seq:0,hits:[],exs:[],c4:[],kb:null,down:0,spawn:null,
-  seen:new Map(),held:false,rockets:[],tracers:[],booms:[],c4m:new Map(),models:[],ac:null,flash:0,last:{},ui:null,lastTag:0,
+  seen:new Map(),held:false,rockets:[],tracers:[],booms:[],c4m:new Map(),remoteR:[],models:[],ac:null,flash:0,last:{},ui:null,lastTag:0,
   // ---------- models ----------
   model(i){
     if(this.models[i])return this.models[i];
@@ -19,7 +20,7 @@ const GUN={armed:false,w:0,hp:100,kills:0,deaths:0,cd:0,shots:0,seq:0,hits:[],ex
     else if(i===1){B(0,.025,.13,.045,.06,.28);B(0,-.06,.02,.04,.12,.05,grip);B(0,.065,.15,.02,.015,.2)}
     else if(i===2){B(0,.02,.15,.04,.05,.32);B(0,.0,.0,.06,.07,.08);B(0,-.07,-.03,.04,.12,.05,grip)}
     else if(i===3){B(0,.02,.1,.05,.07,.26);B(0,-.07,.09,.03,.14,.04,dark);B(0,-.05,-.02,.035,.1,.045,grip);B(0,.02,.28,.02,.02,.1)}
-    else if(i===4){const t=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,.9,12),dark);t.rotation.x=Math.PI/2;t.position.set(0,.05,.2);g.add(t);B(0,.0,-.2,.12,.12,.06,grip);B(0,-.07,.05,.04,.1,.05,grip);const cone=new THREE.Mesh(new THREE.ConeGeometry(.07,.16,12),new THREE.MeshStandardMaterial({color:0xb23a2a,roughness:.5}));cone.rotation.x=Math.PI/2;cone.position.set(0,.05,.72);g.add(cone)}
+    else if(i===4||i===6){this.bazooka(g,i===6)}
     else{B(0,0,.05,.13,.05,.19);const led=B(0,.035,.05,.025,.02,.025,new THREE.MeshBasicMaterial({color:0xff2a1a}));B(0,-.04,-.1,.07,.1,.04,grip)}
     g.rotation.x=Math.PI/2;g.position.set(0,-.2,.04);this.models[i]=g;return g},
   // put the held weapon into a character's right hand and raise the arm (local player and remote avatars)
@@ -29,7 +30,7 @@ const GUN={armed:false,w:0,hp:100,kills:0,deaths:0,cd:0,shots:0,seq:0,hits:[],ex
     if(P._gi!==w){if(P._gw)A.el.remove(P._gw);P._gw=this.model(w).clone();A.el.add(P._gw);P._gi=w}
     A.sh.rotation.x=-1.42;A.sh.rotation.z=0;A.el.rotation.x=-.05;
     // two-handed hold for the bazooka
-    if(w===4){const L=P.arms[0];L.sh.rotation.x=-1.2;L.sh.rotation.z=.25;L.el.rotation.x=-.4}},
+    if(w===4||w===6){const L=P.arms[0];L.sh.rotation.x=-1.2;L.sh.rotation.z=.25;L.el.rotation.x=-.4}},
   // ---------- audio ----------
   sfx(kind,vol){
     try{if(!this.ac){const C=window.AudioContext||window.webkitAudioContext;if(!C)return;this.ac=new C()}const ac=this.ac;if(ac.state==='suspended')ac.resume();
@@ -37,11 +38,42 @@ const GUN={armed:false,w:0,hp:100,kills:0,deaths:0,cd:0,shots:0,seq:0,hits:[],ex
       for(let i=0;i<n;i++){const t=i/n;d[i]=(Math.random()*2-1)*Math.pow(1-t,kind==='boom'?1.6:3)}
       const src=ac.createBufferSource();src.buffer=buf;const f=ac.createBiquadFilter();f.type=kind==='boom'?'lowpass':'bandpass';f.frequency.value=kind==='boom'?260:(kind==='uzi'?1500:1100);
       const gn=ac.createGain();gn.gain.value=(vol||1)*(kind==='boom'?1.6:.55);src.connect(f);f.connect(gn);gn.connect(ac.destination);src.start()}catch(e){}},
+  // detailed shoulder-fired tube (z = forward)
+  bazooka(g,nuke){
+    const mt=(c,r,m)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
+    const olive=mt(nuke?0x6b6f58:0x4f5a2c,.6,.35),steel=mt(0x2a2d30,.4,.8),rubber=mt(0x141414,.9,0),yel=mt(0xd9b82a,.5,.2),red=mt(0xb02a1c,.5,.2),lens=new THREE.MeshStandardMaterial({color:0x335577,roughness:.05,metalness:.9,emissive:0x112233});
+    const C=(r1,r2,len,z,m,x,y)=>{const me=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,len,16),m);me.rotation.x=Math.PI/2;me.position.set(x||0,y||0,z);me.castShadow=true;g.add(me);return me};
+    const B=(x,y,z,sx,sy,sz,m,rx)=>{const b=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),m);b.position.set(x,y,z);if(rx)b.rotation.x=rx;b.castShadow=true;g.add(b);return b};
+    C(.063,.063,1.08,-.02,olive);                       // launch tube
+    C(.062,.092,.14,-.62,steel);                        // rear venturi
+    C(.052,.052,.02,-.69,rubber);                       // dark bore
+    C(.074,.074,.1,.5,steel);                           // front collar
+    C(.068,.068,.02,.3,yel);C(.068,.068,.02,-.22,yel);  // yellow bands
+    if(nuke){C(.07,.07,.06,.12,red);C(.07,.07,.06,.0,red);C(.07,.07,.06,-.12,red)}
+    // warhead peeking out of the muzzle
+    const wr=nuke?.085:.052;C(wr,wr,.22,.62,nuke?mt(0x9aa08a,.5,.4):olive);const nose=new THREE.Mesh(new THREE.ConeGeometry(wr,.18,16),nuke?red:mt(0xb83a22,.5,.2));nose.rotation.x=Math.PI/2;nose.position.z=.82;g.add(nose);
+    // grips, trigger guard, shoulder pad, sling
+    B(0,-.12,.0,.035,.12,.05,rubber,.15);B(0,-.17,.05,.03,.02,.1,steel);B(0,-.09,.28,.035,.1,.05,rubber,-.1);
+    B(0,-.085,-.34,.075,.07,.16,rubber);
+    // optical sight on the left + iron sight on top
+    B(-.085,.07,.08,.045,.05,.16,steel);C(.022,.022,.03,.17,lens,-.085,.07);B(-.05,.055,.08,.06,.012,.05,steel);
+    B(0,.075,.35,.012,.03,.012,steel);B(0,.075,-.15,.05,.025,.012,steel);
+    // sling ring
+    const tor=new THREE.Mesh(new THREE.TorusGeometry(.03,.006,6,10),steel);tor.position.set(.07,-.02,.3);g.add(tor)},
+  rocketMesh(nuke){
+    const g=new THREE.Group();const mt=(c,r,m)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
+    const s=nuke?2:1;const body=new THREE.Mesh(new THREE.CylinderGeometry(.045*s,.045*s,.6*s,12),mt(nuke?0x8a9078:0x56602f,.5,.4));body.rotation.x=Math.PI/2;g.add(body);
+    const nose=new THREE.Mesh(new THREE.ConeGeometry(.045*s,.16*s,12),mt(0xc03a22,.5,.2));nose.rotation.x=Math.PI/2;nose.position.z=.38*s;g.add(nose);
+    for(let k=0;k<4;k++){const f=new THREE.Mesh(new THREE.BoxGeometry(.012,.09*s,.14*s),mt(0x222222,.6,.4));f.position.z=-.26*s;f.rotation.z=k*Math.PI/2;f.translateY(.065*s);g.add(f)}
+    FX.init();const fm=new THREE.SpriteMaterial({map:FX.tex.spark,color:0xffc060,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});const fl=new THREE.Sprite(fm);fl.scale.set(.9*s,.9*s,1);fl.position.z=-.42*s;g.add(fl);g.userData.flame=fl;
+    scene.add(g);return g},
+  rocketFx(r,dt){
+    const m=r.mesh;m.position.copy(r.p);m.lookAt(r.p.x+r.d.x,r.p.y+r.d.y,r.p.z+r.d.z);const fl=m.userData.flame;if(fl){const k=(r.nuke?2:1)*(.8+Math.random()*.5);fl.scale.set(.9*k,.9*k,1)}
+    r.tp+=dt;const sz=r.nuke?1.6:1;while(r.tp>.028){r.tp-=.028;FX.puff({x:r.p.x-r.d.x*.5+(Math.random()-.5)*.1,y:r.p.y-r.d.y*.5,z:r.p.z-r.d.z*.5+(Math.random()-.5)*.1,vx:(Math.random()-.5)*.5,vy:.3,vz:(Math.random()-.5)*.5,s0:.22*sz,s1:1.3*sz,life:1.5,c0:[.95,.82,.55],c1:[.62,.6,.58],op:.5,add:false,drag:.8,grow:1})}},
   // ---------- visual effects ----------
   tracer(a,b){let m=this.tracers.find(t=>!t.on);if(!m){if(this.tracers.length>40)return;const mm=new THREE.Mesh(new THREE.BoxGeometry(.03,.03,1),new THREE.MeshBasicMaterial({color:0xffe28a,transparent:true,opacity:.9,depthWrite:false}));mm.frustumCulled=false;scene.add(mm);m={mesh:mm,on:false,t:0};this.tracers.push(m)}
     const L=a.distanceTo(b);m.mesh.position.copy(a).lerp(b,.5);m.mesh.scale.z=Math.max(.1,L);m.mesh.lookAt(b);m.mesh.visible=true;m.on=true;m.t=.07},
-  boom(x,y,z,r){let m=this.booms.find(t=>!t.on);if(!m){if(this.booms.length>8)return;const mm=new THREE.Mesh(new THREE.SphereGeometry(1,16,12),new THREE.MeshBasicMaterial({color:0xffa23a,transparent:true,opacity:.85,depthWrite:false}));mm.frustumCulled=false;scene.add(mm);m={mesh:mm,on:false,t:0,r:1};this.booms.push(m)}
-    m.mesh.position.set(x,y,z);m.r=r;m.t=0;m.on=true;m.mesh.visible=true;this.sfx('boom',1);if(Math.hypot(x-player.x,z-player.z)<40)this.flash=Math.max(this.flash,.25)},
+  boom(x,y,z,r){FX.explode(x,y,z,r);if(Math.hypot(x-player.x,z-player.z)<r*2.5)this.flash=Math.max(this.flash,.18)},
   // ---------- my pose / aim ----------
   aimRay(){const o=camera.position.clone(),d=new THREE.Vector3();camera.getWorldDirection(d);return {o,d}},
   muzzle(){return new THREE.Vector3(player.x+Math.sin(player.yaw)*.7,player.y+1.25,player.z+Math.cos(player.yaw)*.7)},
@@ -61,8 +93,10 @@ const GUN={armed:false,w:0,hp:100,kills:0,deaths:0,cd:0,shots:0,seq:0,hits:[],ex
     this.cd=W.cd;this.shots++;const {o,d}=this.aimRay();
     d.x+=(Math.random()-.5)*W.spread;d.y+=(Math.random()-.5)*W.spread;d.z+=(Math.random()-.5)*W.spread;d.normalize();
     this.last.ax=d.x;this.last.az=d.z;this.last.ay2=d.y;
-    const m=this.muzzle();this.sfx(W.auto?'uzi':(W.rocket?'rocket':'shot'),1);
-    if(W.rocket){this.rockets.push({p:m.clone(),d:d.clone(),t:0});this.push();return}
+    const m=this.muzzle();if(W.rocket){FX.init();FX.launch()}else this.sfx(W.auto?'uzi':'shot',1);
+    if(W.rocket){const nk=!!W.nuke;this.rockets.push({p:m.clone(),d:d.clone(),t:0,nuke:nk,mesh:this.rocketMesh(nk),tp:0});
+      for(let q=0;q<5;q++)FX.puff({x:m.x-d.x*(.4+q*.35),y:m.y-d.y*(.4+q*.35),z:m.z-d.z*(.4+q*.35),vx:-d.x*(3+q),vy:.4,vz:-d.z*(3+q),s0:.5,s1:2.4,life:1.1,c0:[.9,.88,.82],c1:[.6,.58,.55],op:.55,add:false,drag:1.8,grow:1});
+      FX.shakeT=.3;FX.shakeA=Math.max(FX.shakeA,.1);this.push();return}
     const wall=this.wallDist(o,d,90);const hit=this.raycast(o,d,Math.min(90,wall));
     const end=o.clone().addScaledVector(d,hit?hit.t:Math.min(wall,90));this.tracer(m,end);
     if(hit){const dmg=Math.round(W.dmg*(hit.head?1.8:1));this.addHit(hit.R.peer,dmg);toast(hit.head?'Headshot!':'Hit',(hit.R.st.n||'Friend')+' −'+dmg)}
@@ -98,7 +132,7 @@ const GUN={armed:false,w:0,hp:100,kills:0,deaths:0,cd:0,shots:0,seq:0,hits:[],ex
     const me=COOP.myId||'me';
     for(const R of COOP.peers.values()){const s=R.st,g=s&&s.g;if(!g)continue;const key=R.peer;let L=this.seen.get(key);if(!L){let m0=-1;for(const h of g.hit||[])m0=Math.max(m0,h[0]);for(const e of g.ex||[])m0=Math.max(m0,e[0]);L={seq:m0,shots:g.s||0,kb:g.kb?g.kb[0]:0,c4:0};this.seen.set(key,L)}
       // shots: draw a tracer
-      if(g.s!==undefined&&g.s!==L.shots){const n=g.s-L.shots;L.shots=g.s;if(n>0&&n<20&&R.has&&g.ax&&(s.zn||'')===COOP.zone()){const a=new THREE.Vector3(R.x+Math.sin(R.yaw)*.7,R.y+1.25,R.z+Math.cos(R.yaw)*.7),d=new THREE.Vector3(g.ax[0],g.ax[1],g.ax[2]);this.tracer(a,a.clone().addScaledVector(d,WEAPONS[g.w|0].rocket?14:40));this.sfx(WEAPONS[g.w|0].auto?'uzi':'shot',Math.max(0,1-Math.hypot(R.x-player.x,R.z-player.z)/80))}}
+      if(g.s!==undefined&&g.s!==L.shots){const n=g.s-L.shots;L.shots=g.s;if(n>0&&n<20&&R.has&&g.ax&&(s.zn||'')===COOP.zone()){if((g.w===4||g.w===6)&&n===1){const nk=g.w===6;const rp=new THREE.Vector3(R.x+Math.sin(R.yaw)*.7,R.y+1.25,R.z+Math.cos(R.yaw)*.7);FX.init();this.remoteR.push({p:rp,d:new THREE.Vector3(g.ax[0],g.ax[1],g.ax[2]),t:0,nuke:nk,mesh:this.rocketMesh(nk),tp:0});FX.launch()}const a=new THREE.Vector3(R.x+Math.sin(R.yaw)*.7,R.y+1.25,R.z+Math.cos(R.yaw)*.7),d=new THREE.Vector3(g.ax[0],g.ax[1],g.ax[2]);this.tracer(a,a.clone().addScaledVector(d,WEAPONS[g.w|0].rocket?14:40));this.sfx(WEAPONS[g.w|0].auto?'uzi':'shot',Math.max(0,1-Math.hypot(R.x-player.x,R.z-player.z)/80))}}
       // hits on me
       for(const h of g.hit||[])if(h[0]>L.seq&&h[1]===me){this.damage(h[2],R)}
       // explosions: every client draws it; I take my own damage
@@ -121,12 +155,15 @@ const GUN={armed:false,w:0,hp:100,kills:0,deaths:0,cd:0,shots:0,seq:0,hits:[],ex
     for(const t of this.tracers)if(t.on){t.t-=dt;if(t.t<=0){t.on=false;t.mesh.visible=false}}
     for(const b of this.booms)if(b.on){b.t+=dt;const k=b.t/.5;b.mesh.scale.setScalar(.5+b.r*Math.min(1,k*2.2));b.mesh.material.opacity=Math.max(0,.85*(1-k));if(k>=1){b.on=false;b.mesh.visible=false}}
     // my own rockets
-    for(let i=this.rockets.length-1;i>=0;i--){const r=this.rockets[i];r.t+=dt;const step=42*dt;let hitT=null;
-      const from=r.p.clone();r.p.addScaledVector(r.d,step);
+    for(let i=this.rockets.length-1;i>=0;i--){const r=this.rockets[i];r.t+=dt;const step=(r.nuke?30:42)*dt;let hitT=null;
+      const from=r.p.clone();r.p.addScaledVector(r.d,step);this.rocketFx(r,dt);
       if(r.p.y<groundH(r.p.x,r.p.z)+.1||insideAny(r.p.x,r.p.z,.1,r.p.y))hitT='wall';
       else{const h=this.raycast(from,r.d,step+.5);if(h)hitT='player'}
-      if(hitT||r.t>3){this.rockets.splice(i,1);this.addBoom(r.p.x,r.p.y,r.p.z,7,WEAPONS[4].dmg);this.push();continue}
-      this.tracer(from,r.p.clone());}
+      if(hitT||r.t>(r.nuke?5:3)){this.rockets.splice(i,1);scene.remove(r.mesh);const W=WEAPONS[r.nuke?6:4];this.addBoom(r.p.x,r.p.y,r.p.z,r.nuke?24:7,W.dmg);this.push();continue}}
+    // rockets fired by other players (only drawn)
+    for(let i=this.remoteR.length-1;i>=0;i--){const r=this.remoteR[i];r.t+=dt;r.p.addScaledVector(r.d,(r.nuke?30:42)*dt);this.rocketFx(r,dt);
+      if(r.t>5||r.p.y<groundH(r.p.x,r.p.z)+.1||insideAny(r.p.x,r.p.z,.1,r.p.y)){this.remoteR.splice(i,1);scene.remove(r.mesh)}}
+    FX.update(dt);
     // weapon in hand, local player + everybody else
     this.hold(PLR,this.w,this.armed&&!this.down&&!PORTAL.cur);
     if(this.armed&&this.held&&WEAPONS[this.w].auto)this.fire();
@@ -173,7 +210,7 @@ const GUN={armed:false,w:0,hp:100,kills:0,deaths:0,cd:0,shots:0,seq:0,hits:[],ex
     ui.btn=document.createElement('button');ui.btn.id='bGun';ui.btn.textContent='Armed';ui.btn.onclick=()=>this.setArmed(!this.armed);$('topBtns').appendChild(ui.btn);
     this.ui=ui;this.sync();
     addEventListener('keydown',e=>{if(!started||!this.armed)return;const t=e.target&&e.target.tagName;if(t==='INPUT'||t==='TEXTAREA')return;
-      if(e.code==='KeyF'){if(!e.repeat){this.held=true;this.fire()}}else if(/^Digit[1-6]$/.test(e.code))this.pick(+e.code.slice(5)-1);else if(e.code==='KeyE')this.detonate()});
+      if(e.code==='KeyF'){if(!e.repeat){this.held=true;this.fire()}}else if(/^Digit[1-7]$/.test(e.code))this.pick(+e.code.slice(5)-1);else if(e.code==='KeyE')this.detonate()});
     addEventListener('keyup',e=>{if(e.code==='KeyF')this.held=false});
     ANIM.push(dt=>GUN.tick(dt))}
 };

@@ -84,64 +84,6 @@ function makeDuke(x,y,z,ry){
   add(new THREE.CylinderGeometry(.7,.75,.12,24),M2,0,-.04,0);   // bronze plinth
   return g;
 }
-// ======================= Potemkin stairs v2 =======================
-let STAIRS=null;
-function buildStairs(grp,P,GR){
-  const S=LMK.stairs;const dx=S.x1-S.x0,dz=S.y1-S.y0,L=Math.hypot(dx,dz),tx=dx/L,tz=dz/L,nx=-tz,nz=tx;
-  const yT=groundH(S.x0,S.y0),yB=groundH(S.x1,S.y1);
-  const nSteps=192,flights=10,land=3.6;const tread=(L-(flights-1)*land)/nSteps,rise=(yT-yB)/nSteps;
-  const prof=[];let u=0,y=yT;
-  for(let f=0;f<flights;f++){const n=f<2?20:19;for(let i=0;i<n&&prof.length<nSteps+flights;i++){y-=rise;prof.push([u,y,tread,0]);u+=tread}if(f<flights-1){prof.push([u,y,land,1]);u+=land}}
-  const wAt=uu=>12.5+(21.7-12.5)*Math.min(1,Math.max(0,uu/L));
-  // carve the hill along the stairs so the whole flight (and the funicular beside it) is visible instead of buried in the slope
-  addRamp(S.x0,S.y0,S.x1,S.y1,24,16,yT-.5,yB-.5,true);
-  const W=(uu,v)=>[S.x0+tx*uu+nx*v,S.y0+tz*uu+nz*v];
-  {const a=Math.atan2(tz,tx);const cb=W(L+11,0),ct=W(-7,0);addFlatRect(cb[0],cb[1],a,24,42,10,yB);addFlatRect(ct[0],ct[1],a,16,20,6,yT)}   // terrain flush with the paved squares at both ends
-  const ry=Math.atan2(tx,tz);
-  const gcol=sRGB('#a39d92'),gcol2=sRGB('#b3ac9f'),riser=sRGB('#5f5a52'),wallc=sRGB('#bdb4a2');
-  for(const [u0,yy,len,isLand] of prof){
-    const w=wAt(u0+len/2);const c=W(u0+len/2,0);
-    P.box(c[0],yy-(isLand?.3:rise/2+.1),c[1],w,isLand?.6:rise+.2,len+.02,ry,isLand?gcol2:gcol,7);
-    {const cr=W(u0+len+.03,0);P.box(cr[0],yy-rise/2+.01,cr[1],w-.02,rise-.03,.05,ry,riser,7)}   // darker riser so every step reads
-  }
-  // filled body under the stairs (so it looks massive from the sides)
-  for(let k=0;k<prof.length;k+=6){const [u0,yy]=prof[k];const w=wAt(u0);const c=W(u0+tread*3,0);const gy=Math.min(groundH(...W(u0,w/2+2)),groundH(...W(u0,-w/2-2)),yB)-2;
-    if(yy-.4>gy)P.box(c[0],(yy-.4+gy)/2,c[1],w-.2,yy-.4-gy,tread*6.2,ry,gcol2,7)}
-  // side parapets with balustrade feel + lanterns on landings
-  for(const sd of [-1,1]){
-    for(let k=0;k<prof.length;k++){const [u0,yy,len,isLand]=prof[k];const w=wAt(u0+len/2)/2+.35;const c=W(u0+len/2,sd*w);
-      P.box(c[0],yy+.55,c[1],.7,1.1,len+.02,ry,wallc,7);
-      const gy=groundH(...W(u0+len/2,sd*(w+3)));if(yy-gy>.2)P.box(c[0],(yy+gy)/2-.1,c[1],.7,yy-gy+.2,len+.02,ry,wallc,7);
-      if(isLand){const lp=W(u0+len/2,sd*(w));P.cyl(lp[0],yy+1.1,lp[1],.09,.07,2.6,6,sRGB('#26292b'),6);P.box(lp[0],yy+3.85,lp[1],.42,.6,.42,0,sRGB('#ffe0a0'),3);
-        P.box(lp[0],yy+4.2,lp[1],.55,.1,.55,0,sRGB('#26292b'),6);EXTRA_LAMPS.push([lp[0],yy+3.85,lp[1],2.6])}}
-  }
-  // top platform & bottom square paving
-  groundQuad(GR,[W(-14,-9),W(0,-7),W(0,7),W(-14,9)],5,yT+.09);
-  groundQuad(GR,[W(L,-14),W(L+22,-20),W(L+22,20),W(L,14)],5,yB+.09);
-  SPECIAL.push((x,z,yq)=>{const rx=x-S.x0,rz=z-S.y0;const uu=rx*tx+rz*tz,v=rx*nx+rz*nz;if(uu<0||uu>L)return null;const w=wAt(uu)/2;if(Math.abs(v)>w+.75)return null;
-    let yy=yB;for(let i=prof.length-1;i>=0;i--){if(prof[i][0]<=uu){yy=prof[i][1];break}}if(uu<prof[0][0]+.01)yy=yT;return {h:yy,wall:Math.abs(v)>w-.25,pri:2,surf:'stone'}});
-  addBlock((S.x0+S.x1)/2,(S.y0+S.y1)/2,L+20,40,Math.atan2(dz,dx));
-  // funicular (right side going up)
-  const fo=-(wAt(L)/2+9);const rails=[];
-  for(const sd of [-.8,.8]){const a=W(-4,-(fo+sd)),b=W(L+4,-(fo+sd));const ya=yT+.1,yb=yB+.1;const len=Math.hypot(b[0]-a[0],b[1]-a[1]),ang=Math.atan2(yb-ya,len);
-    P.box((a[0]+b[0])/2,(ya+yb)/2,(a[1]+b[1])/2,.12,.15,Math.hypot(len,yb-ya),ry,sRGB('#5a5d60'),6,-ang)}
-  {const a=W(-4,-fo),b=W(L+4,-fo);const ya=yT-.2,yb=yB-.2;const len=Math.hypot(b[0]-a[0],b[1]-a[1]);const ang=Math.atan2(ya-yb,len);
-    for(let k=0;k<16;k++){const t=(k+.5)/16;const c=[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],yy=ya+(yb-ya)*t;const gy=groundH(c[0],c[1]);if(yy-gy>.4)P.box(c[0],(yy+gy)/2,c[1],2.4,yy-gy,1,ry,wallc,9)}}
-  const cabM=new THREE.MeshStandardMaterial({color:0x2f6fa0,roughness:.45,metalness:.2}),winM=new THREE.MeshStandardMaterial({color:0x111a22,roughness:.05});
-  const cabs=[];for(let i=0;i<2;i++){const g=new THREE.Group();const b=new THREE.Mesh(new THREE.BoxGeometry(2.6,2.6,5.5),cabM);b.position.y=1.5;g.add(b);
-    const w1=new THREE.Mesh(new THREE.BoxGeometry(2.65,.9,4.8),winM);w1.position.y=2.0;g.add(w1);b.castShadow=true;g.userData.dyn=true;grp.add(g);cabs.push(g)}
-  let ft=0;ANIM.push(dt=>{ft+=dt*.03;for(let i=0;i<2;i++){let t=(Math.sin(ft+i*Math.PI)*.5+.5)*.92+.04;const c=W(t*L,-fo+(i?1.9:-1.9));const yy=yT+(yB-yT)*t;
-    cabs[i].position.set(c[0],yy,c[1]);cabs[i].rotation.set(0,ry,0);cabs[i].rotateX(Math.atan2(yT-yB,L))}});
-  // Duke statue
-  const dp=[LMK.duke.x,LMK.duke.y],gy=groundH(dp[0],dp[1]);
-  for(let k=0;k<3;k++)P.box(dp[0],gy+.2+k*.4,dp[1],6.4-k*1.2,.4,6.4-k*1.2,ry,sRGB('#8f897e'),7);P.box(dp[0],gy+3.1,dp[1],2.4,3.6,2.4,ry,sRGB('#857f74'),7);P.box(dp[0],gy+4.95,dp[1],2.9,.3,2.9,ry,sRGB('#8f897e'),7);{const fx=Math.sin(ry),fz=Math.cos(ry);const pm=plateMesh(['ДЮК ДЕ','РІШЕЛЬЄ','1828'],{w:512,h:512,sizes:[84,84,70],color:'#3a2a10',bg:'#c9a24a',weight:'800'},1.9,1.9,.05);pm.position.set(dp[0]+fx*1.23,gy+3.1,dp[1]+fz*1.23);pm.rotation.y=ry;grp.add(pm)}
-  for(let k=0;k<12;k++){const an=k/12*6.283;P.box(dp[0]+Math.cos(an)*4.2,gy+.45,dp[1]+Math.sin(an)*4.2,.25,.9,.25,0,sRGB('#1e1e1e'),1)}
-  grp.add(makeDuke(dp[0],gy+5.1,dp[1],ry));
-  STATIC_CIR.push(dp[0],dp[1],3.4);addFlat(dp[0],dp[1],36,20);TREE_CLEAR.push(dp[0],dp[1],13);
-  PLACES.push({id:'stairs',name:'Potemkin Stairs',sub:'Prymorskyi Blvd, Duke statue',x:dp[0]-tx*14,z:dp[1]-tz*14,yaw:Math.atan2(tx,tz)});
-  STAIRS={W,tx,tz,nx,nz,L,yT,yB,ry,dp,gy};
-  PLACES.push({id:'stairs_b',name:'Sea Terminal',sub:'bottom of the Potemkin Stairs',x:S.x1+tx*14,z:S.y1+tz*14,yaw:Math.atan2(-tx,-tz)});
-}
 // ======================= other landmarks =======================
 function buildLighthouse(grp,P){
   const o=LMK.lighthouse;const dx=o.x-o.bx,dz=o.y-o.by,L=Math.hypot(dx,dz),tx=dx/L,tz=dz/L;const top=SL+2.2;

@@ -111,18 +111,21 @@ function updateTrams(dt){
       if(Math.hypot(t.x-player.x,t.z-player.z)<60&&window.AUD)AUD.tone(880,880,.18,.05,'sine')}
     placeTram(t)}
   if(RIDE.on){const t=RIDE.tram;
-    if(t.kind==='cable'){player.x=t.x+.15;player.z=t.z+.78;player.y=t.y+.12;player.yaw=Math.PI;player.vx=player.vz=0;
+    if(t.kind==='funi'){}
+    else if(t.kind==='bus')busStep(t,dt);
+    else if(t.kind==='pass')passStep(t,dt);
+    else if(t.kind==='cable'){player.x=t.x+.15;player.z=t.z+.78;player.y=t.y+.12;player.yaw=Math.PI;player.vx=player.vz=0;
       PLR.root.position.set(player.x,player.y,player.z);PLR.root.rotation.y=player.yaw;animPlayer(PLR,{spd:0,mode:'sit'},dt)}
     else{const fx=Math.sin(t.yaw),fz=Math.cos(t.yaw);player.x=t.x-fx*2.2+fz*.3;player.z=t.z-fz*2.2-fx*.3;player.y=t.y+.55;player.yaw=t.yaw+Math.PI/2;
     PLR.root.position.set(player.x,player.y,player.z);PLR.root.rotation.y=player.yaw;animPlayer(PLR,{spd:0,mode:'walk'},dt)}}
 }
 function boardTram(t){if(!t)return;RIDE.on=true;RIDE.tram=t;player.vx=player.vz=0;player.scoot=false;$('bScoot').classList.remove('on');cam.init=false;toast('You\'re on the tram','let\'s go! At a stop press E to get off');if(window.AUD)AUD.beep()}
-function leaveTram(){const t=RIDE.tram;if(!t)return;if(t.kind==='cable')return cableLeave(t);if(t.v>.4){toast('Wait for the stop','the tram is moving');return}
+function leaveTram(){const t=RIDE.tram;if(!t)return;if(t.kind==='funi')return funiLeave(t);if(t.kind==='bus')return busLeave(t);if(t.kind==='pass')return passLeave(t);if(t.kind==='cable')return cableLeave(t);if(t.v>.4){toast('Wait for the stop','the tram is moving');return}
   RIDE.on=false;RIDE.tram=null;const fx=Math.sin(t.yaw),fz=Math.cos(t.yaw);
   for(const side of [1,-1])for(const off of [0,-4,4]){const x=t.x+fz*side*2.9+fx*off,z=t.z-fx*side*2.9+fz*off;if(!insideAny(x,z,.35,t.y+.5)){player.x=x;player.z=z;player.y=groundAt(x,z,t.y+1);player.vx=player.vz=0;cam.init=false;return}}
   player.x=t.x+fz*3;player.z=t.z-fx*3;player.y=groundAt(player.x,player.z,t.y+1)}
 function stepTramCamera(dt){const t=RIDE.tram;const tx=t.x,ty=t.y+(t.camH||2.4),tz=t.z;
-  if(!inp.dragging&&!TOUCH_LOOK.active&&t.kind!=='cable'){let tgt=t.yaw+(t.dir>0?0:0);let dy=tgt-cam.yaw;while(dy>Math.PI)dy-=6.283;while(dy<-Math.PI)dy+=6.283;cam.yaw+=dy*Math.min(1,dt*.9)}
+  if(!inp.dragging&&!TOUCH_LOOK.active&&t.kind!=='cable'&&t.kind!=='funi'){let tgt=t.yaw+(t.dir>0?0:0);let dy=tgt-cam.yaw;while(dy>Math.PI)dy-=6.283;while(dy<-Math.PI)dy+=6.283;cam.yaw+=dy*Math.min(1,dt*.9)}
   const dist=t.camDist||Math.max(13,cam.dist*2.2);const pitch=Math.max(.18,cam.pitch);const cp=Math.cos(pitch),sp=Math.sin(pitch);const dx=-Math.sin(cam.yaw)*cp,dy2=sp,dz=-Math.cos(cam.yaw)*cp;
   let d=dist;for(let s=4;s<=dist;s+=.5){const px=tx+dx*s,py=ty+dy2*s,pz=tz+dz*s;if(insideAny(px,pz,.25,py)||py<groundAt(px,pz,py)+.3){d=Math.max(4,s-.5);break}}
   const wx=tx+dx*d,wy=ty+dy2*d,wz=tz+dz*d;if(!cam.init){cam.x=wx;cam.y=wy;cam.z=wz;cam.init=true}

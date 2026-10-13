@@ -79,7 +79,10 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
   drop(R){if(R.lo){scene.remove(R.lo);R.lo.geometry.dispose();R.lo=null}if(R.P){scene.remove(R.P.root);R.P=null}if(R.tag){scene.remove(R.tag);R.tag.material.map.dispose();R.tag=null}if(R.bub){scene.remove(R.bub);R.bub.material.map.dispose();R.bub=null}},
   clearAll(){for(const R of this.peers.values())this.drop(R);this.peers.clear();this.renderList()},
   zone(){if(!PORTAL.cur)return '';const o=PORTAL.opt||{};return PORTAL.cur+(o.ent?':'+o.ent:'')+(o.floor?':'+o.floor:'')},
-  mode(){if(typeof DRIVE!=='undefined'&&DRIVE.on)return 'car';if(RIDE.on)return RIDE.tram&&RIDE.tram.kind==='cable'?'sit':'tram';if(player.sit)return 'sit';if(player.air)return 'air';if(player.scoot)return 'scoot';return 'walk'},
+  mode(){if(typeof DRIVE!=='undefined'&&DRIVE.on)return 'car';if(RIDE.on){const k=RIDE.tram&&RIDE.tram.kind;return (k==='cable'||k==='funi'||k==='bus'||k==='pass')?'sit':'tram'}if(player.sit)return 'sit';if(player.air)return 'air';if(player.scoot)return 'scoot';return 'walk'},
+  // friends who drive: draw their car (the avatar alone was sitting in the air before)
+  carList(){const out=[];for(const R of this.peers.values()){const s=R.st;if(!R.has||!s||!s.in||s.m!=='car'||(s.zn||'')!=='')continue;let h=0;for(const ch of R.peer)h=(h*31+ch.charCodeAt(0))>>>0;
+    out.push({x:R.x,y:R.y,z:R.z,yaw:R.yaw,pitch:0,roll:0,type:4,col:[0xc0262d,0x1f3f73,0xf4f4f2,0x2e5a3c,0xe0a526,0x1c1c1e][h%6]})}return out},
   // ---------- local player outfit + spawn ----------
   onStart(){
     if(!this.onStart.done){this.onStart.done=true;
