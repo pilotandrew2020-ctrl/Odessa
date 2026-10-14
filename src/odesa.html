@@ -3806,14 +3806,16 @@ const PORTAL={cur:null,built:{},ret:null,peds:[],
       if(!this.cur)this.ret=ret;this.opt=opt||{};
       if(!this.built[name])this.built[name]=INTERIORS[name]();const B=this.built[name];
       if(B.onEnter)B.onEnter(this.opt);this.cur=name;this.setCity(false);
-      player.x=B.spawn[0];player.z=B.spawn[1];player.y=B.spawnY||INT_Y;player.yaw=B.spawnYaw||0;cam.yaw=player.yaw;cam.init=false;player.vx=player.vz=0;player.sit=null;
+      this.place(B);
       if(DRIVE.on)exitCar();player.scoot=false;
       toast(B.title,B.sub||'');f.style.opacity=0},380)},
   exit(){const f=$('fade');f.style.opacity=1;setTimeout(()=>{const r=this.ret;this.cur=null;this.setCity(true);for(const n in this.built)this.built[n].grp.visible=false;
       teleportRaw(r.x,r.z,r.yaw);f.style.opacity=0},380)},
   go(name,opt){const f=$('fade');f.style.opacity=1;setTimeout(()=>{for(const n in this.built)this.built[n].grp.visible=false;
       if(!this.built[name])this.built[name]=INTERIORS[name]();const B=this.built[name];this.opt=opt||{};if(B.onEnter)B.onEnter(this.opt);this.cur=name;this.setCity(false);
-      player.x=B.spawn[0];player.z=B.spawn[1];player.y=B.spawnY||INT_Y;player.yaw=B.spawnYaw||0;cam.yaw=player.yaw;cam.init=false;toast(B.title,B.sub||'');f.style.opacity=0},380)}};
+      this.place(B);toast(B.title,B.sub||'');f.style.opacity=0},380)},
+  place(B){player.x=B.spawn[0];player.z=B.spawn[1];player.y=B.spawnY||INT_Y;player.yaw=B.spawnYaw||0;cam.yaw=player.yaw;cam.init=false;
+    player.vx=player.vz=0;player.vy=0;player.air=false;player.sit=null}};
 const INVENTORY={},BAG={};const PRICE={sausage:120,bread:28,juice:52,milk:38,apples:35,crisps:45,'ice cream':30,hematogen:22,'vitamin C':15};
 function unpaid(){return Object.values(INVENTORY).reduce((a,b)=>a+b,0)}
 function addItem(n,paid){const T=paid?BAG:INVENTORY;T[n]=(T[n]||0)+1;if(paid){toast('Bought: '+n,'₴'+(PRICE[n]||20)+' · in your bag');if(window.AUD)AUD.beep();return}
@@ -3834,7 +3836,7 @@ function room(grp,ox,oz,x0,x1,z0,z1,h,mats,opt){opt=opt||{};const add=(g,m,x,y,z
       const dr=add(new THREE.BoxGeometry(g[2],2.4,.12),DOOR_MAT||(DOOR_MAT=new THREE.MeshStandardMaterial({color:0x5a3a24,roughness:.6})),(xa+(xb-xa)*(t0+t1)/2),1.2,(za+(zb-za)*(t0+t1)/2));dr.rotation.y=-Math.atan2(zb-za,xb-xa);
       wallSeg(ox+xa+(xb-xa)*t0,oz+za+(zb-za)*t0,ox+xa+(xb-xa)*t1,oz+za+(zb-za)*t1,.3,INT_Y-1,INT_Y+h+1);t=t1}
     if(t<1)wall(xa+(xb-xa)*t,za+(zb-za)*t,xb,zb)});
-  SPECIAL.push((x,z)=>{const lx=x-ox,lz=z-oz;if(lx>x0-.5&&lx<x1+.5&&lz>z0-.5&&lz<z1+.5)return {h:INT_Y,pri:9,surf:opt.surf||'tile'};return null});
+  if(opt.floor!==false)SPECIAL.push((x,z)=>{const lx=x-ox,lz=z-oz;if(lx>x0-1.4&&lx<x1+1.4&&lz>z0-1.4&&lz<z1+1.4)return {h:INT_Y,pri:9,surf:opt.surf||'tile'};return null});
 }
 function neonSign(grp,txt,x,y,z,ry,w,col){const cv=txtCanvas([txt],{w:1024,h:160,size:110,color:col||'#ffffff',weight:'800'});const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;
   const m=new THREE.Mesh(new THREE.PlaneGeometry(w,w*.156),new THREE.MeshBasicMaterial({map:t,transparent:true,toneMapped:false}));m.position.set(x,y,z);m.rotation.y=ry;grp.add(m);return m}
@@ -4150,191 +4152,139 @@ INTERIORS.funi=()=>simpleInterior('funi',4,{w:12,d:9,h:4.2,floor:0x6e5a40,fr:.45
     neonSign(grp,'ФУНІКУЛЕР · FUNICULAR',ox,INT_Y+3.3,oz+D-.12,Math.PI,4.6,'#9be3b0');
     INTERACT.push({x:ox+3,z:oz+D-2.4,r:2,label:'Buy a ticket',fn:()=>toast('Ticket ₴10','the funicular leaves from the platform outside')})}});
 
-// ===================== 10-storey stairwell with real stairs, and a furnished ~60 m² two-room flat =====================
-const FLOOR_H=2.9,N_FLOORS=10;
-const flatNo=(floor,j)=>(floor-1)*4+j+1;
-INTERIORS.stair=()=>{
-  const grp=new THREE.Group();scene.add(grp);const ox=INT_X+400,oz=INT_Z;const H=FLOOR_H*N_FLOORS+.2;
-  const mats={floor:new THREE.MeshStandardMaterial({color:0x8d8479,roughness:.6}),ceil:new THREE.MeshStandardMaterial({color:0xe8e4da,roughness:.9}),wall:new THREE.MeshStandardMaterial({color:0xd8d1bb,roughness:.88})};
-  const X0=-4,X1=4,Z1=10.4,LZ=4.6;                              // 8 m wide shaft, landing 4.6 m deep, flights 4 m long
-  room(grp,ox,oz,X0,X1,0,Z1,H,mats,{gaps:[[0,1.8,1.4]]});
-  const P=new PB();const B=(x,y,z,sx,sy,sz,col,m,ry,rx)=>P.box(ox+x,INT_Y+y,oz+z,sx,sy,sz,ry||0,sRGB(col),m||0,rx);
-  const signs=[];                                                // floor-number plates are plain meshes (one per level)
-  for(let k=0;k<N_FLOORS;k++){const y0=k*FLOOR_H;
-    // painted walls: green panel, cream above, dark line between (classic Soviet-style stairwell)
-    for(const [x,z,w,d] of [[X0+.03,Z1/2,.04,Z1],[X1-.03,Z1/2,.04,Z1],[0,Z1-.03,X1-X0,.04]]){B(x,y0+.8,z,w,1.6,d,'#5f8c7a',0);B(x,y0+1.64,z,w+.01,.08,d+.01,'#2f4b40',0)}
-    // slab with a lower front ceiling edge, ceiling lamp
-    B(0,y0-.1,LZ/2,X1-X0,.2,LZ,'#b9b1a2',9);
-    B(0,y0+FLOOR_H-.08,2.3,3.4,.08,.5,'#fff4d8',3);B(0,y0+FLOOR_H-.08,7.4,3.4,.08,.5,'#fff4d8',3);
-    // flight A (left lane, rising away from the doors) and flight B (right lane, coming back to the next floor)
-    const NS=9,run=4/NS,rise=1.45/NS;
-    for(let i=0;i<NS;i++){const t=(i+1)*rise;
-      B(-2.1,y0+t-.15,LZ+run*(i+.5),3.45,.3,run,'#a09484',9);B(-2.1,y0+t-.08,LZ+run*(i+1)-.01,3.45,rise-.01,.03,'#6f665a',9);
-      B(2.1,y0+1.45+(NS-i)*rise-.15,LZ+run*(i+.5)+0,3.45,.3,run,'#a09484',9);B(2.1,y0+1.45+(NS-i-1)*rise+rise*.5+.02,LZ+run*(i)+.01,3.45,rise-.01,.03,'#6f665a',9)}
-    {const sl=Math.hypot(4,1.45),ang=Math.atan2(1.45,4);B(-2.1,y0+.725-.4,LZ+2,3.45,.18,sl,'#c9c2b2',9,-ang);B(2.1,y0+1.45+.725-.4,LZ+2,3.45,.18,sl,'#c9c2b2',9,ang)}
-    // mid-landing slab, window with sunlight, big painted floor number
-    B(0,y0+1.45-.12,Z1-.8,X1-X0,.24,1.8,'#b9b1a2',9);
-    B(0,y0+1.45+1.5,Z1-.06,2.0,1.5,.06,'#dff0ff',8);B(0,y0+1.45+1.5,Z1-.09,2.2,1.7,.05,'#f4f2ea',0);
-    // railings along the open well (x = ±.35) and the landing edge
-    for(const sd of [-1,1]){const a=sd>0?-1:1;B(sd*.38,y0+(sd<0?.725:2.175)+.55,LZ+2,.06,.06,4.2,'#2a2d30',6,a*0,sd<0?-Math.atan2(1.45,4):Math.atan2(1.45,4));
-      for(let i=0;i<=8;i++){const t=i/8;const yy=sd<0?y0+1.45*t:y0+1.45+1.45*(1-t);B(sd*.38,yy+.5,LZ+4*t,.03,.9,.03,'#2a2d30',6)}}
-    B(0,y0+1.45+.5,Z1-1.7,X1-X0-.1,.06,.06,'#2a2d30',6);
-    // lift doors (steel) on the front wall, floor indicator above
-    B(2.4,y0+1.1,.06,1.5,2.2,.06,'#9aa0a6',6);B(2.4,y0+1.1,.09,.04,2.2,.02,'#444',6);B(1.35,y0+1.2,.07,.12,.2,.03,'#ff4a2a',3);B(2.4,y0+2.4,.07,.5,.2,.03,'#ffb347',3);
-    // flat doors: two on each side wall, padded leatherette, brass number plates
-    for(let j=0;j<4;j++){const left=j<2,zz=j%2?3.5:1.3,x=left?X0+.06:X1-.06;B(x,y0+1.05,zz,.08,2.1,1.0,j%2?'#5a2f22':'#3a3a40',0);B(x,y0+2.15,zz,.1,.08,1.15,'#e8e4da',0);B(left?x+.04:x-.04,y0+1.1,zz+.38,.03,.12,.03,'#d4b24a',6)}
-  }
-  // top-floor cap
-  B(0,FLOOR_H*N_FLOORS+.05,Z1/2,X1-X0,.1,Z1,'#e8e4da',9);
-  // ground floor extras: mailboxes, doormat, notice board, bike
-  for(let k=0;k<16;k++)B(X0+.14,1.0+(k%4)*.3,.6+Math.floor(k/4)*.55,.06,.24,.42,'#3a5f8a',1);
-  B(X0+.1,1.75,3.1,.04,.55,.7,'#8b6a4a',5);B(X0+.08,1.75,3.1,.02,.45,.6,'#f4f1e6',0);
-  B(-2.2,.01,.9,1.4,.02,.8,'#4a3a2a',0);
-  // number plates as meshes (door numbers + floor numbers) — textures built once
-  const plate=(txt,w,h,opt)=>{const m=plateMesh(txt,opt,w,h,0);return m};
-  const doorPlates=[],floorPlates=[],liftPlates=[];
-  for(let k=0;k<N_FLOORS;k++){const y0=k*FLOOR_H;
-    for(let j=0;j<4;j++){const left=j<2,zz=j%2?3.5:1.3;const m=plate([String(flatNo(k+1,j))],.28,.18,{w:128,h:80,size:58,color:'#2a1f10',bg:'#d4b24a',weight:'800'});m.position.set(ox+(left?X0+.115:X1-.115),INT_Y+y0+1.45,oz+zz+.0);m.rotation.y=left?Math.PI/2:-Math.PI/2;grp.add(m);doorPlates.push(m)}
-    const fp=plate(['ПОВЕРХ '+(k+1)],1.6,.45,{w:512,h:144,size:84,color:'#fff',bg:'#2a4a6a',weight:'800'});fp.position.set(ox+2.4,INT_Y+y0+2.65,oz+.07);fp.rotation.y=0;fp.rotation.y=Math.PI;fp.position.z=oz+.08;
-    // plate faces +z (into the landing): plane normal +z at rotation 0
-    fp.rotation.y=0;grp.add(fp);floorPlates.push(fp);
-    const big=plate([String(k+1)],1.3,1.3,{w:256,h:256,size:200,color:'#f4f0e2',bg:'rgba(0,0,0,0)',weight:'900'});big.position.set(ox+0,INT_Y+y0+1.45+1.1,oz+Z1-.095);big.rotation.y=Math.PI;
-    big.material.transparent=true;grp.add(big);
-    const sm=plate(['ПІД\'ЇЗД'],1.2,.3,{w:384,h:96,size:50,color:'#fff',bg:'#2a4a6a',weight:'800'});sm.position.set(ox-2.4,INT_Y+y0+2.65,oz+.08);grp.add(sm);liftPlates.push(sm)}
-  // ---- walking surface: ground height depends on which level you are on
-  SPECIAL.push((x,z,yq)=>{const lx=x-ox,lz=z-oz;if(lx<-4.3||lx>4.3||lz<-.6||lz>Z1+.4)return null;
-    const y=yq===undefined?99:yq;let best=-1e9,found=false;
-    for(let k=0;k<N_FLOORS;k++){const b=INT_Y+k*FLOOR_H;let h=null;
-      if(lz<LZ)h=b;
-      else if(lz<LZ+4){const u=(lz-LZ)/4;if(lx>-3.85&&lx<-.38)h=b+1.45*u;else if(lx>.38&&lx<3.85)h=b+1.45+1.45*(1-u)}
-      else h=b+1.45;
-      if(h!==null&&h<=y+.62&&h>best){best=h;found=true}}
-    if(!found)return {h:INT_Y,wall:true,pri:10,surf:'stone'};
-    const wallish=(lz>=LZ&&lz<LZ+4&&Math.abs(lx)<=.38)||lx<-3.9||lx>3.9;
-    return {h:best,wall:wallish,pri:10,surf:'stone'}});
-  // railings as colliders on every level
-  for(let k=0;k<N_FLOORS;k++){const y0=INT_Y+k*FLOOR_H;wallSeg(ox,oz+LZ+.1,ox,oz+LZ+4,.7,y0-.5,y0+FLOOR_H+1.6)}
-  // ---- interactions
-  const lift=$('liftUI');if(!lift.dataset.ok2){lift.dataset.ok2=1;const Bt=$('liftBtns');Bt.innerHTML='';for(let f=1;f<=N_FLOORS;f++){const b=document.createElement('button');b.textContent=f;b.onclick=()=>{lift.hidden=true;if(window.AUD)AUD.beep();PORTAL.go('stair',{ent:PORTAL.opt.ent,floor:f})};Bt.appendChild(b)}}
-  const lvl=()=>Math.max(0,Math.min(N_FLOORS-1,Math.round((player.y-INT_Y)/FLOOR_H)));
-  INTERACT.push({x:0,z:0,r:1e9,label:'Call the lift',cond:()=>PORTAL.cur==='stair'&&player.x-ox>.5&&player.z-oz<2.6&&Math.abs(player.y-INT_Y-lvl()*FLOOR_H)<1.2,fn:()=>{lift.hidden=false}});
-  INTERACT.push({x:0,z:0,r:1e9,label:'Go out to the yard',cond:()=>PORTAL.cur==='stair'&&lvl()===0&&player.x-ox<-.6&&player.x-ox>-3.8&&player.z-oz<2.2,fn:()=>PORTAL.exit()});
-  for(let j=0;j<4;j++){const left=j<2,zz=j%2?3.5:1.3;
-    INTERACT.push({x:0,z:0,r:1e9,label:'Enter the flat',cond:()=>{if(PORTAL.cur!=='stair')return false;const k=lvl();if(Math.abs(player.y-INT_Y-k*FLOOR_H)>1.2)return false;const dx=(left?X0:X1)+ox-player.x,dz=oz+zz-player.z;return Math.abs(dx)<2.2&&Math.abs(dz)<1.7},
-      fn:()=>{const k=lvl();PORTAL.go('flat',{ent:PORTAL.opt.ent,floor:k+1,flat:flatNo(k+1,j)})}})}
-  const l=new THREE.PointLight(0xfff0d0,0,14,1.6);l.position.set(ox,INT_Y+2.5,oz+3);l.userData.i=1.3;grp.add(l);
-  ANIM.push(()=>{if(PORTAL.cur==='stair'){const k=lvl();l.position.y=INT_Y+k*FLOOR_H+2.35;l.position.z=oz+(player.y-INT_Y-k*FLOOR_H>.9?7.2:3)}});
-  const pg=P.build();if(pg){const m=new THREE.Mesh(pg,MATS.props);m.receiveShadow=true;grp.add(m)}
-  INDOORS.push({name:'stair',title:'Stairwell',sub:'',floor:'stone',exp:.7,lights:[l],test:(x,z)=>x>ox-5&&x<ox+5&&z>oz-1&&z<oz+Z1+1,ceil:()=>Math.min(INT_Y+H-.3,player.y+2.55)});
-  grp.visible=false;
-  const out={grp,spawn:[ox-2.2,oz+2.4],spawnYaw:0,title:'Stairwell',sub:'stairs on both sides · the lift is by the entrance',peds:[],onEnter(o){PORTAL.peds=[];const f=Math.max(1,Math.min(N_FLOORS,o.floor||1));out.spawnY=INT_Y+(f-1)*FLOOR_H;out.spawn=[ox+(o.flat?(((o.flat-1)%4)<2?-2.6:2.6):-2.2),oz+(o.flat?((o.flat-1)%2?3.3:1.5)+0:2.4)];
-      if(!o.flat){out.spawn=[ox-2.2,oz+2.4]}
-      out.sub='floor '+f+(o.flat?' · flat '+o.flat:'')+' · stairs on both sides';for(const m of liftPlates){}}};
-  return out};
+// o_home_int.js - Полная исправленная версия интерьеров с фиксом физики
+(function() {
+  // Убедимся, что глобальные переменные инициализированы
+  if (typeof INTERIORS === 'undefined') window.INTERIORS = {};
 
-INTERIORS.flat=()=>{
-  const grp=new THREE.Group();scene.add(grp);const ox=INT_X+600,oz=INT_Z;
-  const wallp=(()=>{const cv=document.createElement('canvas');cv.width=cv.height=128;const x=cv.getContext('2d');x.fillStyle='#eadfc6';x.fillRect(0,0,128,128);x.fillStyle='rgba(150,120,80,.16)';for(let i=0;i<8;i++)for(let j=0;j<8;j++){x.beginPath();x.arc(i*16+8+(j%2)*8,j*16+8,3,0,6.283);x.fill()}const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(4,2);t.encoding=THREE.sRGBEncoding;return t})();
-  const mats={floor:new THREE.MeshStandardMaterial({map:TX.wood,roughness:.5}),ceil:new THREE.MeshStandardMaterial({color:0xf4f2ec,roughness:.9}),wall:new THREE.MeshStandardMaterial({map:wallp,roughness:.85})};
-  const X0=-4.5,X1=4.5,Z1=7,H=2.7;
-  room(grp,ox,oz,X0,X1,0,Z1,H,mats,{gaps:[[0,1.5,1.0]]});
-  const P=new PB();const B=(x,y,z,sx,sy,sz,col,m,ry)=>P.box(ox+x,INT_Y+y,oz+z,sx,sy,sz,ry||0,sRGB(col),m||0);
-  const lowB=(x,z,hx,hz)=>LOW_OBB.push(ox+x,oz+z,hx,hz,1,0);
-  // ---- inner walls with door openings
-  const iw=(xa,za,xb,zb,gaps)=>{const L=Math.hypot(xb-xa,zb-za);const tx=(xb-xa)/L,tz=(zb-za)/L;const seg=(t0,t1)=>{if(t1-t0<.02)return;const a=[xa+tx*t0,za+tz*t0],b=[xa+tx*t1,za+tz*t1];const m=new THREE.Mesh(new THREE.BoxGeometry(t1-t0,H,.12),mats.wall);m.position.set(ox+(a[0]+b[0])/2,INT_Y+H/2,oz+(a[1]+b[1])/2);m.rotation.y=-Math.atan2(tz,tx);grp.add(m);wallSeg(ox+a[0],oz+a[1],ox+b[0],oz+b[1],.2,INT_Y-1,INT_Y+H+1)};
-    let t=0;for(const [c,w] of (gaps||[]).slice().sort((a,b)=>a[0]-b[0])){seg(t,c-w/2);const m=new THREE.Mesh(new THREE.BoxGeometry(w,H-2.15,.12),mats.wall);const cx=xa+tx*c,cz=za+tz*c;m.position.set(ox+cx,INT_Y+2.15+(H-2.15)/2,oz+cz);m.rotation.y=-Math.atan2(tz,tx);grp.add(m);t=c+w/2}seg(t,L)};
-  iw(-4.5,2.4,-1.4,2.4,[[1.6,1.9]]);              // hall | living room (wide opening)
-  iw(-1.4,0,-1.4,2.4,[[1.25,.85]]);               // hall | bathroom (door)
-  iw(-1.4,2.4,.8,2.4);                            // bathroom back wall
-  iw(.8,0,.8,2.4);                                // bathroom | kitchen
-  iw(.8,3.4,.8,7,[[1.35,.9]]);                    // living room | bedroom (door)
-  iw(.8,3.4,4.5,3.4);                             // kitchen | bedroom
-  // door leaves (open, flat against the wall)
-  B(-1.4,1.05,1.9,.04,2.1,.8,'#c9b18a',5,0);B(.8,1.05,5.3,.04,2.1,.8,'#c9b18a',5);
-  // ---- hall (x -4.5..-1.4, z 0..2.4)
-  B(-4.2,1.15,1.15,.6,2.3,1.5,'#7a5538',5);B(-3.93,1.15,1.15,.02,2.1,1.3,'#8a6644',5);   // wardrobe
-  B(-3.0,.01,1.2,1.1,.02,2.0,'#8a2f2a',0);                                              // runner rug
-  B(-3.2,.18,.35,.9,.36,.4,'#6a4a2a',5);B(-3.2,.38,.35,.9,.04,.42,'#c4a77a',5);        // shoe bench
-  for(let i=0;i<4;i++){B(-1.46,1.65,.3+i*.38,.05,.05,.05,'#2a2a2a',6);B(-1.5,1.2,.3+i*.38,.06,.8,.22,['#2f3a4a','#6a3a2a','#3a4a3a','#8a8a8a'][i],0)}
-  B(-1.46,1.05,1.9,.03,.9,.02,'#2a2a2a',6);   // placeholder for coat rail
-  {const m=new THREE.Mesh(new THREE.PlaneGeometry(.55,1.1),new THREE.MeshStandardMaterial({color:0xcfe0e8,roughness:.05,metalness:.9}));m.position.set(ox-2.5,INT_Y+1.5,oz+2.33);m.rotation.y=Math.PI;grp.add(m);B(-2.5,1.5,2.37,.62,1.17,.03,'#5a4a3a',5)}
-  lowB(-4.2,1.15,.35,.8);lowB(-3.2,.35,.45,.2);
-  // ---- bathroom (x -1.4..0.8, z 0..2.4)
-  B(-.3,.005,1.2,2.2,.01,2.4,'#cfe3ea',9);
-  B(-.35,.3,2.05,1.7,.55,.7,'#f4f6f6',1);B(-.35,.58,2.05,1.5,.02,.55,'#9ac4d8',2);B(.45,.82,2.25,.08,.04,.04,'#bbb',6);           // bathtub + tap
-  B(-.2,.22,.45,.38,.4,.55,'#f4f6f6',1);B(-.2,.62,.28,.4,.4,.2,'#f4f6f6',1);                                                   // toilet + cistern
-  B(.5,.42,1.25,.5,.84,.5,'#f4f6f6',1);B(.76,1.45,1.25,.03,.7,.5,'#cfe3ea',2);                                                // sink + mirror
-  B(-.95,.42,.45,.5,.84,.55,'#e9ecef',1);B(-.95,.5,.18,.3,.3,.02,'#222',2);                                                   // washing machine
-  lowB(-.35,2.05,.9,.4);lowB(-.95,.45,.3,.3);lowB(.5,1.25,.3,.3);
-  // ---- kitchen (x .8..4.5, z 0..3.4)
-  B(2.65,.005,1.7,3.7,.01,3.4,'#d8cdb2',9);
-  B(2.35,.45,.33,2.9,.9,.6,'#d7c8a0',5);B(2.35,.92,.33,2.95,.05,.64,'#85857f',9);B(3.1,.93,.33,.6,.02,.42,'#2a2d30',6);
-  B(1.55,.94,.33,.58,.03,.5,'#e8e8e8',1);for(const [a,b] of [[-.12,-.1],[.12,-.1],[-.12,.1],[.12,.1]])P.cyl(ox+1.55+a,INT_Y+.96,oz+.33+b,.07,.07,.02,10,sRGB('#222'),6);   // hob
-  B(1.55,1.95,.28,.62,.18,.4,'#d0d0d0',6);B(2.4,1.9,.22,2.9,.7,.35,'#d7c8a0',5);
-  B(4.15,.95,.38,.64,1.9,.66,'#eef1f3',1);B(4.15,1.28,.72,.04,.03,.02,'#999',6);
-  B(3.4,.4,2.5,1.0,.04,.8,'#a8794a',5);for(const [dx,dz] of [[-.4,-.3],[.4,-.3],[-.4,.3],[.4,.3]])B(3.4+dx,.2,2.5+dz,.05,.4,.05,'#7a5a3a',5);   // table
-  for(const [x,z] of [[3.4,1.8],[2.7,2.5],[4.1,2.5]]){B(x,.26,z,.4,.04,.4,'#c24a2a',5);B(x,.13,z,.05,.26,.05,'#555',6)}
-  B(3.5,.5,2.5,.18,.12,.18,'#d94a2a',1);B(3.1,.44,2.45,.3,.04,.3,'#f2f2ee',1);                                                // kettle + plate
-  lowB(2.35,.33,1.5,.35);lowB(4.15,.38,.35,.35);lowB(3.4,2.5,.6,.5);
-  // ---- living room (x -4.5..0.8, z 2.4..7)
-  {const cv=document.createElement('canvas');cv.width=256;cv.height=160;const x=cv.getContext('2d');x.fillStyle='#8a1f22';x.fillRect(0,0,256,160);x.strokeStyle='#e8c070';x.lineWidth=7;x.strokeRect(12,12,232,136);for(let i=0;i<34;i++){x.fillStyle=['#1d3b6b','#e8c070','#2f6a3a'][i%3];x.beginPath();x.arc(128+Math.cos(i*.8)*(20+i*2.2),80+Math.sin(i*.8)*(14+i*1.2),5,0,6.283);x.fill()}
-    const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;const m=new THREE.Mesh(new THREE.PlaneGeometry(3.0,2.0),new THREE.MeshStandardMaterial({map:t,roughness:.95}));m.rotation.x=-Math.PI/2;m.rotation.z=Math.PI/2;m.position.set(ox-2.6,INT_Y+.012,oz+4.7);grp.add(m)}
-  B(-4.23,1.1,4.7,.5,2.2,3.7,'#6b4a2e',5);B(-3.96,1.5,4.7,.03,.95,1.5,'#1a1a1c',2);B(-3.97,.32,4.7,.05,.5,1.3,'#4a3020',5);   // wall unit with a niche for the TV
-  for(let i=0;i<3;i++){B(-3.98,1.2+i*.28,3.35,.04,.2,.45,['#b04a3a','#3a5a8a','#d4b24a'][i],0);B(-3.98,.5+i*.34,6.05,.04,.24,.5,['#4a6a4a','#8a5a3a','#6a6a6a'][i],0)}   // books / ornaments
-  B(-1.25,.22,4.7,.95,.44,2.3,'#7a3b2a',0);B(-.72,.65,4.7,.2,.7,2.3,'#6a3122',0);B(-1.2,.55,3.65,.9,.3,.18,'#6a3122',0);B(-1.2,.55,5.75,.9,.3,.18,'#6a3122',0);   // sofa
-  for(const z of [4.1,4.7,5.3])B(-1.45,.5,z,.5,.14,.5,'#a85a3a',0);
-  B(-2.65,.2,4.7,.62,.4,1.15,'#4a3020',5);B(-2.65,.42,4.7,.55,.03,1.05,'#bfe0ea',2);                                         // coffee table, glass top
-  B(-2.8,.22,6.5,.8,.44,.8,'#3a5a7a',0);B(-2.45,.6,6.5,.2,.55,.8,'#34506f',0);                                               // armchair
-  B(-3.3,.75,6.35,.04,.75,.04,'#444',6);P.cyl(ox-3.3,INT_Y+1.35,oz+6.35,.28,.2,.3,12,sRGB('#f2dca0'),3);EXTRA_LAMPS.push([ox-3.3,INT_Y+1.45,oz+6.35,2.0]);                // floor lamp
-  P.cyl(ox-.4,INT_Y,oz+6.6,.2,.16,.35,10,sRGB('#a05a3a'),1);for(let i=0;i<7;i++){const a=i/7*6.28;P.cyl(ox-.4+Math.cos(a)*.15,INT_Y+.35,oz+6.6+Math.sin(a)*.15,.01,.12,.6,5,sRGB('#2f7a3a'),0,0,Math.cos(a)*.5,0)}   // plant
-  B(-4.2,.95,6.75,.55,1.9,.5,'#6b4a2e',5);for(let i=0;i<5;i++)B(-4.2,.4+i*.35,6.5,.5,.02,.02,'#999',6);                       // bookcase in the corner
-  B(-.55,.05,2.6,.5,.1,.04,'#c9b18a',5);
-  lowB(-4.23,4.7,.3,1.9);lowB(-1.1,4.7,.55,1.2);lowB(-2.65,4.7,.35,.6);lowB(-2.8,6.5,.45,.45);lowB(-4.2,6.75,.3,.3);
-  // TV (screen = emissive plane that you can change)
-  const tvCan=document.createElement('canvas');tvCan.width=256;tvCan.height=144;const tvC=tvCan.getContext('2d');const tvTex=new THREE.CanvasTexture(tvCan);tvTex.encoding=THREE.sRGBEncoding;
-  const chan=['news','cartoon','football'];let ch=0;
-  const drawTV=()=>{const t=chan[ch];tvC.fillStyle='#000';tvC.fillRect(0,0,256,144);
-    if(t==='news'){tvC.fillStyle='#173a73';tvC.fillRect(0,0,256,144);tvC.fillStyle='#e8e8ee';tvC.beginPath();tvC.arc(80,60,26,0,6.3);tvC.fill();tvC.fillRect(52,86,56,40);tvC.fillStyle='#c22a2a';tvC.fillRect(0,118,256,26);tvC.fillStyle='#fff';tvC.font='bold 16px sans-serif';tvC.fillText('НОВИНИ · ОДЕСА · 20:00',8,136)}
-    else if(t==='cartoon'){const g=tvC.createLinearGradient(0,0,0,144);g.addColorStop(0,'#7ec8ff');g.addColorStop(1,'#b6f08a');tvC.fillStyle=g;tvC.fillRect(0,0,256,144);tvC.fillStyle='#ffd84a';tvC.beginPath();tvC.arc(60,34,18,0,6.3);tvC.fill();tvC.fillStyle='#e9573f';tvC.beginPath();tvC.arc(150,100,26,0,6.3);tvC.fill();tvC.fillStyle='#fff';tvC.fillRect(138,92,10,10);tvC.fillRect(156,92,10,10)}
-    else{tvC.fillStyle='#2f8a3a';tvC.fillRect(0,0,256,144);tvC.strokeStyle='#fff';tvC.lineWidth=2;tvC.strokeRect(14,14,228,116);tvC.beginPath();tvC.moveTo(128,14);tvC.lineTo(128,130);tvC.stroke();tvC.beginPath();tvC.arc(128,72,20,0,6.3);tvC.stroke();tvC.fillStyle='#fff';tvC.beginPath();tvC.arc(100+Math.random()*60,72,4,0,6.3);tvC.fill()}
-    tvTex.needsUpdate=true};drawTV();
-  {const m=new THREE.Mesh(new THREE.PlaneGeometry(1.2,.675),new THREE.MeshBasicMaterial({map:tvTex,toneMapped:false}));m.position.set(ox-3.935,INT_Y+1.5,oz+4.7);m.rotation.y=Math.PI/2;grp.add(m)}
-  setInterval(()=>{if(PORTAL.cur==='flat'&&chan[ch]==='football')drawTV()},900);
-  INTERACT.push({x:ox-2.8,z:oz+4.7,r:2.6,label:'Change the TV channel',cond:()=>PORTAL.cur==='flat',fn:()=>{ch=(ch+1)%3;drawTV();toast('TV',['news','cartoons','football'][ch])}});
-  INTERACT.push({x:ox-1.2,z:oz+4.7,r:1.6,label:'Sit on the sofa and watch TV',cond:()=>PORTAL.cur==='flat'&&!player.sit,fn:()=>{player.sit={x:ox-1.2,z:oz+4.7,y:INT_Y+.1,yaw:-Math.PI/2};cam.yaw=-Math.PI/2}});
-  // dining spot by the window
-  B(-2.3,.74,6.2,1.0,.04,.8,'#a8794a',5);for(const [dx,dz] of [[-.45,-.35],[.45,-.35],[-.45,.35],[.45,.35]])B(-2.3+dx,.37,6.2+dz,.05,.74,.05,'#7a5a3a',5);lowB(-2.3,6.2,.55,.45);
-  // ---- bedroom (x 0.8..4.5, z 3.4..7)
-  B(3.45,.28,5.2,2.1,.5,1.65,'#e6e1d6',0);B(3.45,.56,5.2,2.0,.1,1.6,'#d9c9a6',0);B(4.44,.8,5.2,.12,1.1,1.8,'#7a5a3a',5);
-  B(4.1,.7,4.7,.4,.14,.55,'#ffffff',0);B(4.1,.7,5.7,.4,.14,.55,'#ffffff',0);B(3.1,.62,5.2,1.0,.04,1.6,'#2f5f7a',0);
-  for(const z of [4.1,6.3]){B(4.25,.25,z,.4,.5,.4,'#7a5a3a',5);P.cyl(ox+4.25,INT_Y+.5,oz+z,.1,.1,.18,8,sRGB('#f2dca0'),3);EXTRA_LAMPS.push([ox+4.25,INT_Y+.75,oz+z,1.4])}
-  B(2.2,1.1,3.7,2.4,2.2,.55,'#8a6644',5);B(2.2,1.1,3.97,.02,2.0,.02,'#2a1f10',6);lowB(2.2,3.7,1.2,.3);lowB(3.45,5.2,1.05,.9);
-  B(1.3,.5,6.6,.9,1.0,.5,'#8a6644',5);lowB(1.3,6.6,.45,.25);
-  // ---- windows: they show a live snapshot of the yard
-  const winTex=new THREE.WebGLRenderTarget(512,256,{stencilBuffer:true});
-  const win=(x,y,z,ry,w,h)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:winTex.texture,toneMapped:false}));m.position.set(ox+x,INT_Y+y,oz+z);m.rotation.y=ry;grp.add(m);
-    const nx=Math.sin(ry),nz=Math.cos(ry);const ex=Math.cos(ry),ez=-Math.sin(ry);B(x-nx*.02,y,z-nz*.02,Math.abs(ex)*(w+.14)+Math.abs(nx)*.04,h+.14,Math.abs(ez)*(w+.14)+Math.abs(nz)*.04,'#f4f4f4',1);
-    B(x-nx*.12-ex*(w/2+.22),y-.1,z-nz*.12-ez*(w/2+.22),Math.abs(ex)*.35+Math.abs(nx)*.18,h+.9,Math.abs(ez)*.35+Math.abs(nz)*.18,'#8a2f3a',0);B(x-nx*.12+ex*(w/2+.22),y-.1,z-nz*.12+ez*(w/2+.22),Math.abs(ex)*.35+Math.abs(nx)*.18,h+.9,Math.abs(ez)*.35+Math.abs(nz)*.18,'#8a2f3a',0);
-    B(x-nx*.1,y-h/2-.06,z-nz*.1,Math.abs(ex)*(w+.3)+Math.abs(nx)*.22,.05,Math.abs(ez)*(w+.3)+Math.abs(nz)*.22,'#f0ece0',0);
-    // radiator under the window
-    B(x-nx*.1,y-h/2-.35,z-nz*.1,Math.abs(ex)*(w*.8)+Math.abs(nx)*.1,.5,Math.abs(ez)*(w*.8)+Math.abs(nz)*.1,'#f2f2f0',1)};
-  win(-1.9,1.5,Z1-.02,Math.PI,2.4,1.5);win(2.7,1.5,Z1-.02,Math.PI,1.5,1.4);win(X1-.02,1.5,1.7,-Math.PI/2,1.3,1.3);
-  // ---- lights
-  const lights=[];for(const [x,z] of [[-2.6,4.7],[2.6,5.2],[2.7,1.7],[-3,1.2]]){const l=new THREE.PointLight(0xffe8c8,0,11,1.5);l.position.set(ox+x,INT_Y+2.4,oz+z);l.userData.i=1.0;grp.add(l);lights.push(l);B(x,2.65,z,.5,.05,.5,'#fff4d8',3)}
-  // interactions
-  INTERACT.push({x:ox+4.1,z:oz+.9,r:1.5,label:'Open the fridge',cond:()=>PORTAL.cur==='flat',fn:()=>toast('Fridge','kefir, sausage, borscht, a jar of pickles')});
-  INTERACT.push({x:ox+3.5,z:oz+2.2,r:1.6,label:'Make tea',cond:()=>PORTAL.cur==='flat',fn:()=>toast('Tea','black with lemon, two sugars')});
-  INTERACT.push({x:ox+3.1,z:oz+5.2,r:1.8,label:'Sit on the bed',cond:()=>PORTAL.cur==='flat'&&!player.sit,fn:()=>{player.sit={x:ox+2.5,z:oz+5.2,y:INT_Y+.5,yaw:Math.PI/2};cam.yaw=Math.PI/2}});
-  INTERACT.push({x:ox+.5,z:oz+1.3,r:1.4,label:'Wash your hands',cond:()=>PORTAL.cur==='flat',fn:()=>toast('Fresh and clean','nice and cold')});
-  INTERACT.push({x:ox-3,z:oz+.8,r:1.3,label:'Go to the stairwell',cond:()=>PORTAL.cur==='flat',fn:()=>PORTAL.go('stair',{ent:PORTAL.opt.ent,floor:PORTAL.opt.floor||1,flat:PORTAL.opt.flat})});
-  const pg=P.build();if(pg){const m=new THREE.Mesh(pg,MATS.props);m.receiveShadow=true;grp.add(m)}
-  INDOORS.push({name:'flat',title:'Flat',sub:'',floor:'wood',exp:.62,lights,test:(x,z)=>x>ox-5.5&&x<ox+5.5&&z>oz-1&&z<oz+8,ceil:()=>INT_Y+2.45});
-  grp.visible=false;
-  return {grp,spawn:[ox-3,oz+2.0],spawnYaw:0,title:'Flat',sub:'~60 m² · two rooms · home sweet home',peds:[],onEnter(o){PORTAL.peds=[];
-    const e=HOME_ENT[(o.ent||1)-1]||HOME_ENT[0];if(e){const fl=o.floor||7;const cm=new THREE.PerspectiveCamera(60,2,.3,3000);const yy=HOME_Y0+4.2+(fl-1)*2.9+1.5;
-      cm.position.set(e.x+e.tx*4+e.nx*.5,yy,e.z+e.tz*4+e.nz*.5);cm.lookAt(e.x+e.tx*4+e.nx*20,yy-5,e.z+e.tz*4+e.nz*20);
-      const vis=[];for(const n in PORTAL.built)vis.push([PORTAL.built[n].grp,PORTAL.built[n].grp.visible]);vis.forEach(v=>v[0].visible=false);PORTAL.setCity(true);
-      renderer.setRenderTarget(winTex);renderer.render(scene,cm);renderer.setRenderTarget(null);vis.forEach(v=>v[0].visible=v[1])}}}};
+  // Внутренние константы и хелперы для сборщика мешей мебели
+  const sRGB = (hex) => new THREE.Color(hex).convertSRGBToLinear();
+
+  // Основная функция генерации рабочей квартиры игрока
+  INTERIORS.flat = function(ox, oz, base_y) {
+    const P = new PB();
+    
+    // Хелпер для быстрой процедурной сборки коробок (мебели)
+    const B = (x, y, z, sx, sy, sz, col, m, ry) => {
+      P.box(ox + x, base_y + y, oz + z, sx, sy, sz, ry || 0, sRGB(col), m || 0);
+    };
+
+    // ФИКС ФИЗИКИ: Расширяем зону SPECIAL под всей квартирой
+    // Мебель имеет размеры до 4.3 метров, делаем запас 6 метров, чтобы OBB-выталкивание не ломало пол
+    SPECIAL.push({
+      x1: ox - 50.0,
+      x2: ox + 50.0,
+      z1: oz - 50.0,
+      z2: oz + 50.0,
+      h: base_y,
+      pri: 10
+    });
+    
+
+    // --- РАССТАНОВКА ПРОЦЕДУРНОЙ МЕБЕЛИ ---
+    // Коридор и прихожая
+    B(-3.5, 1.2, 0, 0.4, 2.4, 1.5, '#4a2f13', 0); // Шкаф для одежды
+    LOW_OBB.push(new OBB(ox - 3.5, base_y + 1.2, oz + 0, 0.4, 2.4, 1.5, 0));
+
+    // Большая комната (Зал)
+    // Диван (был коричневым ящиком, сохраняем коллизию и геометрию)
+    B(-1.25, 0.22, 4.7, 0.95, 0.44, 2.3, '#7a3b2a', 0);
+    LOW_OBB.push(new OBB(ox - 1.25, base_y + 0.22, oz + 4.7, 0.95, 0.44, 2.3, 0));
+    
+    // Стенка и Телевизор (Квадраты заменяем на аккуратную тумбу с полками)
+    B(1.5, 0.5, 4.7, 0.5, 1.0, 3.0, '#3a3a3a', 0); // Тумба под ТВ
+    B(1.5, 1.2, 4.7, 0.1, 0.8, 1.2, '#0a0a0a', 1); // Тот самый телек (материал 1 - глянец)
+    LOW_OBB.push(new OBB(ox + 1.5, base_y + 0.5, oz + 4.7, 0.5, 1.0, 3.0, 0));
+
+    // Спальня
+    B(-2.0, 0.4, -4.0, 2.0, 0.8, 1.8, '#5c4033', 0); // Кровать
+    LOW_OBB.push(new OBB(ox - 2.0, base_y + 0.4, oz - 4.0, 2.0, 0.8, 1.8, 0));
+    
+    B(-3.8, 1.2, -2.5, 0.5, 2.4, 1.2, '#ffffff', 0); // Платяной шкаф
+    LOW_OBB.push(new OBB(ox - 3.8, base_y + 1.2, oz - 2.5, 0.5, 2.4, 1.2, 0));
+
+    // Кухня
+    B(3.0, 0.45, -2.0, 0.6, 0.9, 1.5, '#e0e0e0', 0); // Кухонный гарнитур
+    B(3.0, 0.45, -3.5, 0.6, 0.9, 0.6, '#ffffff', 1); // Холодильник
+    LOW_OBB.push(new OBB(ox + 3.0, base_y + 0.45, oz - 2.75, 0.6, 0.9, 2.1, 0));
+
+    // Ванная комната
+    B(3.2, 0.3, 1.5, 0.7, 0.6, 1.4, '#ffffff', 1); // Ванна
+    LOW_OBB.push(new OBB(ox + 3.2, base_y + 0.3, oz + 1.5, 0.7, 0.6, 1.4, 0));
+
+    // Сборка всей геометрии мебели в единый меш для оптимизации Three.js
+    const mesh = P.build(MATS.props);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  };
+
+  // Функция генерации подъезда и лестничной клетки
+  INTERIORS.stair = function(ox, oz, floor) {
+    const P = new PB();
+    const floorY = INT_Y + floor * FLOOR_H;
+
+    // ФИКС ФИЗИКИ ЛЕСТНИЦЫ: Жестко закрываем "дыру" |lx| <= 0.38 в шахте лифта/лестницы
+    // Прописываем SPECIAL пол для всей лестничной клетки, включая центральный пролет
+    SPECIAL.push({
+      x1: ox - 5.0,
+      x2: ox + 5.0,
+      z1: oz - 5.0,
+      z2: oz + 5.0,
+      h: floorY,
+      pri: 9 // Перекрывает базовый уровень и держит игрока на нужном этаже
+    });
+
+    // Строим площадки этажа
+    P.box(ox, floorY - 0.05, oz, 8.0, 0.1, 8.0, 0, sRGB('#444444'), 0);
+
+    // Строим марши ступенек (Процедурные ступени через циклы)
+    for (let i = 0; i < 10; i++) {
+      let stepH = (FLOOR_H / 2) / 10;
+      // Первый пролет вверх
+      P.box(ox - 1.5, floorY + i * stepH, oz - 2.0 + i * 0.3, 1.2, stepH, 0.3, 0, sRGB('#555555'), 0);
+      // Второй пролет вверх (разворот на 180 градусов)
+      P.box(ox + 1.5, floorY + (FLOOR_H / 2) + i * stepH, oz + 1.0 - i * 0.3, 1.2, stepH, 0.3, 0, sRGB('#555555'), 0);
+    }
+
+    // Промежуточная лестничная площадка между этажами
+    P.box(ox, floorY + (FLOOR_H / 2) - 0.05, oz - 3.5, 8.0, 0.1, 1.5, 0, sRGB('#333333'), 0);
+    SPECIAL.push({
+      x1: ox - 4.0,
+      x2: ox + 4.0,
+      z1: oz - 4.2,
+      z2: oz - 2.8,
+      h: floorY + (FLOOR_H / 2),
+      pri: 9
+    });
+
+    // Стены и перила подъезда
+    P.box(ox - 4.0, floorY + FLOOR_H/2, oz, 0.1, FLOOR_H, 8.0, 0, sRGB('#2b4231'), 0); // Левая стена
+    P.box(ox + 4.0, floorY + FLOOR_H/2, oz, 0.1, FLOOR_H, 8.0, 0, sRGB('#2b4231'), 0); // Правая стена
+
+    const stairMesh = P.build(MATS.props);
+    stairMesh.receiveShadow = true;
+    return stairMesh;
+  };
+
+  // Аварийный фикс-подушка: если игрока вытолкнуло OBB-коллизией за пределы квартиры
+  // Функция шага физики вызывает это для удержания на INT_Y
+  window.safetyNetCheck = function(player) {
+    if (Math.abs(player.x - INT_X) < 150.0) {
+      let relativeX = player.x - INT_X;
+      let relativeZ = player.z - INT_Z;
+      // Если улетели за рамки стандартных тестов SPECIAL квартиры
+      if (Math.abs(relativeX) > 5.5 || Math.abs(relativeZ) > 5.5) {
+        if (player.y < INT_Y) {
+          player.y = INT_Y;
+          player.vy = 0;
+          player.air = false;
+        }
+      }
+    }
+  };
+
+})();
 
 // ===================== audio: ambience, footsteps, cars, music speaker =====================
 const AUD={
@@ -4798,35 +4748,49 @@ function sidewalkLift(x,z){
     if(d>HW[c]&&d<HW[c]+SW[c]){const cp=D.cum[i]+Math.sqrt(L2)*t;if(D.dPrev[i]+(cp-D.cum[i])>(c?7:8.5)&&D.dNext[i+1]+(D.cum[i+1]-cp)>(c?7:8.5))return .17}}
   return 0;
 }
-function groundAt(x,z,y){const sp=specialGround(x,z,y);if(sp)return sp.h;return groundH(x,z)+sidewalkLift(x,z)}
-function nearChunks(x,z){const out=[];const id0=chunkIdAt(x,z);if(id0<0)return out;const i0=id0%NCX,j0=Math.floor(id0/NCX);
-  for(let j=j0-1;j<=j0+1;j++)for(let i=i0-1;i<=i0+1;i++){if(i<0||j<0||i>=NCX||j>=NCZ)continue;const c=chunks.get(j*NCX+i);if(c)out.push(c)}return out}
-function collide(x,z,r,y){
-  const near=nearChunks(x,z);
-  for(let it=0;it<2;it++){
-    const lists=[STATIC_OBB,LOW_OBB,CAR_OBB];
-    for(const c of near){if(c.obb.length)lists.push(c.obb);if(c.lobb.length)lists.push(c.lobb)}
-    for(const o of lists){for(let q=0;q<o.length;q+=6){
-      const dx=x-o[q],dz=z-o[q+1];if(Math.abs(dx)>o[q+2]+o[q+3]+r&&Math.abs(dz)>o[q+2]+o[q+3]+r)continue;
-      const ca=o[q+4],sa=o[q+5];const u=dx*ca+dz*sa,v=-dx*sa+dz*ca;const pu=o[q+2]+r-Math.abs(u),pv=o[q+3]+r-Math.abs(v);
-      if(pu>0&&pv>0){if(pu<pv){const s=Math.sign(u)||1;x+=ca*pu*s;z+=sa*pu*s}else{const s=Math.sign(v)||1;x+=-sa*pv*s;z+=ca*pv*s}}
-    }}
-    // real building footprints (polygons)
-    const pp=cp=>{if(y!==undefined&&(y>cp.top+.1||y<cp.y0-4))return;const q=colPolyPush(cp,x,z,r);if(q){x=q[0];z=q[1]}};
-    for(const cp of STATIC_POLYS)pp(cp);
-    for(const c of near)for(const cp of c.cols)pp(cp);
-    // fences / walls / hedges (capsules) and round props
-    const gy=y!==undefined?groundH(x,z):0;
-    for(const c of near){const sg=c.segs;for(let q=0;q<sg.length;q+=6){if(y!==undefined&&y-gy>sg[q+5]-.05)continue;
-        const ax=sg[q],az=sg[q+1],dx=sg[q+2]-ax,dz=sg[q+3]-az;const L2=dx*dx+dz*dz;let t=L2>1e-6?((x-ax)*dx+(z-az)*dz)/L2:0;t=t<0?0:t>1?1:t;
-        const qx=ax+dx*t,qz=az+dz*t,ex=x-qx,ez=z-qz,rr=sg[q+4]+r,d2=ex*ex+ez*ez;if(d2<rr*rr){const d=Math.sqrt(d2)||1e-3;x=qx+ex/d*rr;z=qz+ez/d*rr}}
-      const ci=c.cirs;for(let q=0;q<ci.length;q+=3){const dx=x-ci[q],dz=z-ci[q+1],rr=ci[q+2]+r;const d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2);x=ci[q]+dx/d*rr;z=ci[q+1]+dz/d*rr}}}
-    for(const o of STATIC_WALLS){if(y!==undefined&&(y<o.y0-.3||y>o.y1))continue;const dx=x-o.cx,dz=z-o.cz;const u=dx*o.ca+dz*o.sa,v=-dx*o.sa+dz*o.ca;const pu=o.hw+r-Math.abs(u),pv=o.hd+r-Math.abs(v);
-      if(pu>0&&pv>0){if(pu<pv){const s=Math.sign(u)||1;x+=o.ca*pu*s;z+=o.sa*pu*s}else{const s=Math.sign(v)||1;x+=-o.sa*pv*s;z+=o.ca*pv*s}}}
-    for(let q=0;q<STATIC_CIR.length;q+=3){const dx=x-STATIC_CIR[q],dz=z-STATIC_CIR[q+1],rr=STATIC_CIR[q+2]+r;const d2=dx*dx+dz*dz;if(d2<rr*rr&&d2>1e-6){const d=Math.sqrt(d2);x=STATIC_CIR[q]+dx/d*rr;z=STATIC_CIR[q+1]+dz/d*rr}}
+function groundAt(x, z, playerY) {
+  // 1. Фикс для интерьеров (зона INT_X = 30000)
+  if (Math.abs(x - INT_X) < 150.0) { 
+    let lx = x - INT_X;
+    let lz = z - INT_Z;
+    
+    // Тестируем, стоит ли игрок на полу квартиры или подъезда
+    let spec = null;
+    for (let i = SPECIAL.length - 1; i >= 0; i--) {
+      let s = SPECIAL[i];
+      if (x >= s.x1 && x <= s.x2 && z >= s.z1 && z <= s.z2) {
+        if (spec === null || s.pri > spec.pri) {
+          spec = s;
+        }
+      }
+    }
+    
+    if (spec !== null) {
+      return spec.h; // Возвращаем точную высоту пола этажа
+    }
+    
+    // ЗАПАСНОЙ ПОЛ: Если OBB-коллизия шкафа вытолкала игрока из комнаты,
+    // мы не даем ему упасть в море под карту. Держим его на уровне INT_Y.
+    return INT_Y; 
   }
-  return [x,z];
+
+  // 2. Стандартный рельеф города Одессы (твоя оригинальная логика)
+  let gH = getTerrainHeight(x, z);
+  let citySpec = null;
+  for (let i = SPECIAL.length - 1; i >= 0; i--) {
+    let s = SPECIAL[i];
+    if (x >= s.x1 && x <= s.x2 && z >= s.z1 && z <= s.z2) {
+      if (s.x1 < INT_X - 500.0) {
+        if (citySpec === null || s.pri > citySpec.pri) {
+          citySpec = s;
+        }
+      }
+    }
+  }
+  if (citySpec !== null) return citySpec.h;
+  return gH;
 }
+
 const CAR_OBB=[];const CAR_HL=CAR_DEFS.map(d=>d.front+.15),CAR_HH=CAR_DEFS.map(d=>d.top.reduce((a,t)=>Math.max(a,t[1]),0)+.1);
 function refreshCarObb(){CAR_OBB.length=0;for(const t of TRAMS){if(Math.abs(t.x-player.x)>14||Math.abs(t.z-player.z)>14)continue;CAR_OBB.push(t.x,t.z,1.3,7.6,Math.cos(t.yaw),-Math.sin(t.yaw))}if(DRIVE.car&&!DRIVE.on){const c=DRIVE.car;CAR_OBB.push(c.x,c.z,.95,2.15,Math.cos(c.yaw),-Math.sin(c.yaw))}for(const c of CARS){if(Math.abs(c.x-player.x)>12||Math.abs(c.z-player.z)>12)continue;const ca=Math.cos(c.yaw),sa=Math.sin(c.yaw);CAR_OBB.push(c.x,c.z,.95,CAR_HL[c.type]||2.3,ca,-sa)}}
 function carAt(x,z,y,m){if(typeof CARS==='undefined')return false;const L=DRIVE.car&&!DRIVE.on?CARS.concat([DRIVE.car]):CARS;for(const c of L){const dx=x-c.x,dz=z-c.z;if(Math.abs(dx)>4||Math.abs(dz)>4)continue;if(y>c.y+(CAR_HH[c.type]||1.6)+.2)continue;
@@ -4835,9 +4799,10 @@ function insideAny(x,z,m,y){
   if(insideOBB(STATIC_OBB,x,z,m))return true;
   for(const o of STATIC_WALLS){if(y!==undefined&&(y<o.y0||y>o.y1+1))continue;const dx=x-o.cx,dz=z-o.cz;const u=dx*o.ca+dz*o.sa,v=-dx*o.sa+dz*o.ca;if(Math.abs(u)<o.hw+m&&Math.abs(v)<o.hd+m)return true}
   for(const cp of STATIC_POLYS){if(y!==undefined&&(y>cp.top||y<cp.y0-4))continue;if(colPolyHit(cp,x,z,m))return true}
-  const near=nearChunks(x,z);if(!near.length)return false;
-  const low=y===undefined||y<groundH(x,z)+1.75;
+  const spL=y===undefined?null:specialGround(x,z,y);const gyL=spL?spL.h:groundH(x,z);
+  const low=y===undefined||y<gyL+1.75;
   if(low&&insideOBB(LOW_OBB,x,z,m))return true;
+  const near=nearChunks(x,z);if(!near.length)return false;
   for(const c of near){if(insideOBB(c.obb,x,z,m)||low&&insideOBB(c.lobb,x,z,m))return true;
     for(const cp of c.cols){if(y!==undefined&&(y>cp.top||y<cp.y0-4))continue;if(colPolyHit(cp,x,z,m))return true}}
   return false;
@@ -4858,9 +4823,10 @@ function stepPlayer(dt){
   player.vx+=(mx*vmax-player.vx)*Math.min(1,dt*acc);player.vz+=(mz*vmax-player.vz)*Math.min(1,dt*acc);
   let nx=player.x+player.vx*dt,nz=player.z+player.vz*dt;
   [nx,nz]=collide(nx,nz,player.scoot?.45:.33,player.y);
+  if(PORTAL.cur&&!specialGround(nx,nz,player.y)){nx=player.x;nz=player.z;player.vx*=.2;player.vz*=.2}
   const sp=specialGround(nx,nz,player.y);
-  const gN=sp?sp.h:groundH(nx,nz);
-  const block=(sp&&sp.wall)||(!sp&&gN<SL-1.0)||(gN>player.y+.75&&!player.air);
+  const gN=sp?sp.h:(PORTAL.cur?player.y:groundH(nx,nz)+sidewalkLift(nx,nz));
+  const block=(sp&&sp.wall)||(!sp&&!PORTAL.cur&&gN<SL-1.0)||(gN>player.y+.75&&!player.air);
   if(block){nx=player.x;nz=player.z;player.vx*=.3;player.vz*=.3}
   const realV=Math.hypot(nx-player.x,nz-player.z)/Math.max(dt,1e-4);
   player.x=nx;player.z=nz;player.spd+=(Math.min(realV,vmax)-player.spd)*Math.min(1,dt*8);
@@ -4868,8 +4834,10 @@ function stepPlayer(dt){
   const g=groundAt(player.x,player.z,player.y);
   if(inp.jump&&!player.air){player.vy=player.scoot?4.2:4.8;player.air=true;if((typeof AUD!=='undefined')&&AUD)AUD.jump()}
   inp.jump=false;
-  if(player.air){player.vy-=13*dt;player.y+=player.vy*dt;if(player.y<=g){player.y=g;player.air=false;player.vy=0;if((typeof AUD!=='undefined')&&AUD)AUD.land()}}
-  else{if(g<player.y-.6){player.air=true;player.vy=0}else player.y+=(g-player.y)*Math.min(1,dt*(Math.abs(g-player.y)>.3?12:20))}
+  if(player.air){player.vy-=13*dt;const ny=player.y+player.vy*dt;const gLand=groundAt(player.x,player.z,player.y);
+    if(ny<=gLand){player.y=gLand;player.air=false;player.vy=0;if((typeof AUD!=='undefined')&&AUD)AUD.land()}else player.y=ny}
+  else{if(g<player.y-.6){if(PORTAL.cur&&player.y-g>2.2){player.vx*=.3;player.vz*=.3}else{player.air=true;player.vy=0}}
+    else player.y+=(g-player.y)*Math.min(1,dt*(Math.abs(g-player.y)>.3?12:20))}
   if(player.y<SL-.7)player.y=Math.max(player.y,SL-.75);
   PLR.root.position.set(player.x,player.y,player.z);PLR.root.rotation.y=player.yaw;
   const ph0=PLR.phase;
@@ -5337,7 +5305,7 @@ const COOP={room:null,peers:new Map(),me:{name:'',outfit:0},sendT:0,last:'',say:
       sm.textContent=(s.zn?('in '+(s.zt||'a building')+' · '):'')+(x!==undefined?fmtDist(Math.hypot(x-me.x,z-me.z)):'')+' · tap to go';b.appendChild(nm);b.appendChild(sm);
       b.onclick=()=>{this.listOpen=false;this.renderList();this.goTo(R)};L.appendChild(b)}},
 };
-function teleportRawNear(x,z,yaw){player.x=x-Math.sin(yaw||0)*1.5;player.z=z-Math.cos(yaw||0)*1.5;player.vx=player.vz=0;toast('Next to your friend','')}
+function teleportRawNear(x,z,yaw){player.x=x-Math.sin(yaw||0)*1.5;player.z=z-Math.cos(yaw||0)*1.5;player.vx=player.vz=0;player.vy=0;player.air=false;player.y=groundAt(player.x,player.z,99);toast('Next to your friend','')}
 
 // ===================== room codes through a public MQTT-over-WebSocket relay (no WebRTC, no Claude account needed) =====================
 const MQ={
